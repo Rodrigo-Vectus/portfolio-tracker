@@ -33,3 +33,6 @@ data/
 .vscode/
 .DS_Store
 *.swp
+
+# Artefactos de entrega
+*.tar.gz
