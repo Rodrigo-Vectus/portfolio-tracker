@@ -245,6 +245,16 @@ docker compose logs backend | tail -40
 healthchecks del compose lo contemplan, pero en un servidor lento la primera
 vez puede tardar. Reintentar en 30 segundos.
 
+**El frontend falla con `Failed to resolve import "algo"`.** El volumen
+anonimo de `node_modules` quedo desactualizado. Compose lo conserva al recrear
+el contenedor, asi que reconstruir la imagen no alcanza. El entrypoint del
+frontend lo detecta y reinstala solo; si aun asi persiste:
+
+```bash
+docker compose rm -sfv frontend    # -v borra el volumen anonimo
+docker compose up -d frontend
+```
+
 **El frontend no llega a la API.** Vite proxea `/api` a `http://backend:8000`
 por la red interna de Docker. Si el backend no esta levantado, la pantalla lo
 va a mostrar como "Sin respuesta", que es el comportamiento correcto.

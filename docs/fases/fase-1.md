@@ -74,6 +74,18 @@ Un cliente por prueba hacia que la segunda tomara una conexion del bucle
 anterior. El cliente pasa a ser de alcance `session` en `conftest.py`, con las
 cookies limpiadas entre pruebas para que el orden no altere los resultados.
 
+**El volumen anonimo de `node_modules` no se actualiza solo.** Al agregar
+`react-router-dom`, el frontend seguia fallando con `Failed to resolve import`
+aunque la imagen tuviera la dependencia instalada. La causa: el volumen
+anonimo se creo en la Fase 0 y Compose lo conserva al recrear el contenedor,
+tapando el `node_modules` de la imagen. Reconstruir no arregla nada porque el
+problema no esta en la imagen.
+
+El frontend pasa a tener un entrypoint que compara el hash de `package.json`
+contra un marcador dentro de `node_modules` y reinstala si difieren. El
+Dockerfile ademas copia el lock, para que dos builds no resuelvan versiones
+distintas.
+
 ## Que quedo afuera
 
 Crear y desactivar usuarios, permisos granulares y consulta de la bitacora:

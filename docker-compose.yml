@@ -90,7 +90,12 @@ services:
       - "${BIND_ADDR:-127.0.0.1}:${FRONTEND_PORT:-5173}:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules       # no pisar los modulos instalados en la imagen
+      # Volumen anonimo para no pisar los modulos de la imagen con el
+      # directorio del host. OJO: Compose lo conserva al recrear el
+      # contenedor, asi que puede quedar desactualizado frente a package.json.
+      # El entrypoint del frontend lo detecta y reinstala; para forzarlo a
+      # mano: docker compose rm -sfv frontend
+      - /app/node_modules
     networks: [ptnet]
 
 volumes:
