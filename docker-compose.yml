@@ -1,0 +1,104 @@
+name: pt
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Locale y timezone para que las fechas no dependan del host
+      TZ: ${DEFAULT_TIMEZONE:-America/Argentina/Buenos_Aires}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [ptnet]
+    # Sin `ports`: la base NUNCA se expone al host. Ver README para conectarse.
+
+  redis:
+    image: redis:7-alpine
+    container_name: pt-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [ptnet]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pt-backend
+    restart: unless-stopped
+    env_file: [.env]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app          # hot-reload en desarrollo
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health/live', timeout=3).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [ptnet]
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pt-worker
+    restart: unless-stopped
+    env_file: [.env]
+    # El worker NO corre migraciones: espera a que el backend las aplique.
+    entrypoint: ["bash", "/app/scripts/worker-entrypoint.sh"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      backend: {condition: service_started}
+    volumes:
+      - ./backend:/app
+    networks: [ptnet]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pt-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE: ${VITE_API_BASE:-/api}
+    depends_on:
+      backend: {condition: service_started}
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules       # no pisar los modulos instalados en la imagen
+    networks: [ptnet]
+
+volumes:
+  pgdata:
+    name: pt_pgdata
+  redisdata:
+    name: pt_redisdata
+
+networks:
+  ptnet:
+    name: pt_network

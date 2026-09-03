@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-900 text-text font-sans text-base antialiased;
+  }
+
+  /* Cifras alineadas en columna. En una plataforma financiera esto no es
+     estetica: comparar 1.533.600 con 425.340 exige que los digitos ocupen
+     el mismo ancho. Se usa la variante tabular de IBM Plex, no una fuente
+     monoespaciada aparte. */
+  .num {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  /* Foco visible siempre: la navegacion por teclado tiene que funcionar
+     desde la primera fase, no agregarse al final. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-ink-900;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
