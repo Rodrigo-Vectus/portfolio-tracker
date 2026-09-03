@@ -32,6 +32,9 @@ done
 echo "[entrypoint] aplicando migraciones (alembic upgrade head) ..."
 alembic upgrade head
 
+echo "[entrypoint] verificando administrador inicial ..."
+python -m app.cli seed-admin
+
 RELOAD_FLAG=""
 if [ "${APP_ENV:-development}" = "development" ]; then
   RELOAD_FLAG="--reload"

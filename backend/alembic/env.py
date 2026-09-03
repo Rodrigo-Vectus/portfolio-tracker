@@ -15,8 +15,8 @@ from sqlalchemy import pool
 from app.core.config import get_settings
 from app.db.base import Base
 
-# Importar aca los modelos para que autogenerate los detecte.
-# En F2: from app.models import *  # noqa
+# Importar los modelos para que autogenerate los detecte.
+import app.models  # noqa: F401
 
 config = context.config
 settings = get_settings()

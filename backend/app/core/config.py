@@ -36,7 +36,25 @@ class Settings(BaseSettings):
 
     # --- Seguridad ---
     secret_key: str = Field(min_length=32)
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:8211"
+
+    # Access token corto: si se filtra, la ventana de uso es chica.
+    access_token_minutes: int = 15
+    # Refresh largo: define cuanto dura la sesion sin volver a ingresar clave.
+    refresh_token_days: int = 7
+    # Cookie Secure exige HTTPS. En desarrollo va en False; en produccion,
+    # detras del reverse proxy con TLS (F9), pasa a True.
+    cookie_secure: bool = False
+    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+
+    # Freno de fuerza bruta en el login.
+    login_max_attempts: int = 8
+    login_lockout_minutes: int = 15
+
+    # --- Administrador inicial ---
+    initial_admin_name: str = "Administrador"
+    initial_admin_email: str = ""
+    initial_admin_password: str = ""
 
     # --- Preferencias de dominio (defaults del sistema) ---
     default_display_currency: str = "USD"

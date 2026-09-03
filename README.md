@@ -8,8 +8,8 @@ un precio escrito a mano.
 OPERACIONES -> POSICIONES -> COTIZACIONES -> VALUACION -> RENDIMIENTO -> DASHBOARD
 ```
 
-**Estado: Fase 0** — infraestructura. Todavia no hay modelo financiero ni
-cotizaciones.
+**Estado: Fase 1** — autenticacion y layout. Todavia no hay modelo financiero
+ni cotizaciones.
 
 ---
 
@@ -257,8 +257,8 @@ va a mostrar como "Sin respuesta", que es el comportamiento correcto.
 
 | Fase | Contenido | Estado |
 |---|---|---|
-| 0 | Scaffolding, Docker, Postgres, Redis, migraciones, healthchecks | **actual** |
-| 1 | Autenticacion, roles, layout con sidebar | |
+| 0 | Scaffolding, Docker, Postgres, Redis, migraciones, healthchecks | listo |
+| 1 | Autenticacion, roles, layout con sidebar | **actual** |
 | 2 | Modelo financiero: activos, cuentas, operaciones, lotes, posiciones, caja | |
 | 2.5 | Importador del Excel con dry-run y reconciliacion | |
 | 3 | Market data: proveedores, cotizaciones, FX, cache, manejo de errores | |
@@ -270,7 +270,39 @@ va a mostrar como "Sin respuesta", que es el comportamiento correcto.
 | 9 | Pulido y produccion | |
 
 Las decisiones que fundamentan este plan estan en
-[`docs/adr/0001-decisiones-fase-0.md`](docs/adr/0001-decisiones-fase-0.md).
+[`docs/adr/0001-decisiones-fase-0.md`](docs/adr/0001-decisiones-fase-0.md) y
+[`docs/adr/0002-autenticacion.md`](docs/adr/0002-autenticacion.md).
+
+---
+
+## Primer ingreso
+
+El administrador se crea solo al arrancar, a partir de `INITIAL_ADMIN_EMAIL` e
+`INITIAL_ADMIN_PASSWORD`. Nace con la marca de **cambio de contrasena
+obligatorio**: la clave del `.env` sirve para entrar una vez.
+
+    http://IP-DEL-SERVIDOR:8211
+
+Tras ingresar, la aplicacion no deja pasar a ninguna seccion hasta elegir una
+contrasena nueva de al menos 10 caracteres con letras y numeros.
+
+Si el seed no corrio:
+
+    docker compose logs backend | grep seed_admin
+    docker compose exec backend python -m app.cli seed-admin
+
+Es idempotente: si el administrador ya existe, no lo pisa.
+
+### Como funciona la sesion
+
+    login  ->  access token (15 min, en memoria del navegador)
+           ->  refresh token (7 dias, cookie httpOnly)
+           ->  cookie CSRF (legible, se copia al encabezado X-CSRF-Token)
+
+El access token no se guarda en `localStorage`: ahi lo leeria cualquier script
+inyectado. Se renueva solo un minuto antes de vencer. Cada renovacion rota el
+refresh; si aparece uno ya usado, se revoca la sesion entera por sospecha de
+robo. El detalle esta en el ADR 0002.
 
 ---
 
@@ -284,3 +316,15 @@ Las decisiones que fundamentan este plan estan en
 5. **No avanzar de fase sin OK explicito.**
 6. **Exactitud antes que velocidad.** Un calculo mal es peor que una pantalla incompleta.
 7. **Distinguir dato de mercado, dato ingresado y dato calculado.** Siempre.
+
+---
+
+## Nota sobre el nombre del proyecto Compose
+
+El `name: pt` del `docker-compose.yml` no es cosmetico. Docker Compose agrupa
+contenedores, redes y volumenes por nombre de proyecto: dos stacks distintos
+con el mismo nombre se pisan entre si, y un `docker compose down -v` en uno
+puede borrar los volumenes del otro. Si en el servidor ya corre otro proyecto,
+verificar antes con:
+
+    docker compose ls
