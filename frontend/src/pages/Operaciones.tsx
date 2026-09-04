@@ -29,9 +29,11 @@ import { formatearCantidad, formatearFecha, formatearImporte } from "../lib/form
 import {
   anularOperacion,
   crearOperacion,
+  fetchAccounts,
   fetchAssets,
   fetchPortfolios,
   fetchTransactions,
+  type Account,
   type Asset,
   type Portfolio,
   type Transaction,
@@ -55,6 +57,7 @@ function hoyLocal(): string {
 export function Operaciones() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [activos, setActivos] = useState<Asset[]>([]);
+  const [cuentas, setCuentas] = useState<Account[]>([]);
   const [elegido, setElegido] = useState("");
   const [operaciones, setOperaciones] = useState<Transaction[] | null>(null);
   const [verAnuladas, setVerAnuladas] = useState(false);
@@ -64,6 +67,7 @@ export function Operaciones() {
 
   const [tipo, setTipo] = useState<TxType>("BUY");
   const [assetId, setAssetId] = useState("");
+  const [accountId, setAccountId] = useState("");
   const [cantidad, setCantidad] = useState("");
   const [precio, setPrecio] = useState("");
   const [comision, setComision] = useState("0");
@@ -71,7 +75,11 @@ export function Operaciones() {
 
   useEffect(() => {
     void (async () => {
-      const [p, a] = await Promise.all([fetchPortfolios(), fetchAssets()]);
+      const [p, a, c] = await Promise.all([
+        fetchPortfolios(),
+        fetchAssets(),
+        fetchAccounts(),
+      ]);
       if (p.ok) {
         setPortfolios(p.data);
         if (p.data.length > 0) setElegido(p.data[0].id);
@@ -79,6 +87,10 @@ export function Operaciones() {
       if (a.ok) {
         setActivos(a.data);
         if (a.data.length > 0) setAssetId(a.data[0].id);
+      }
+      if (c.ok) {
+        setCuentas(c.data);
+        if (c.data.length > 0) setAccountId(c.data[0].id);
       }
     })();
   }, []);
@@ -107,6 +119,10 @@ export function Operaciones() {
     const r = await crearOperacion({
       portfolio_id: elegido,
       asset_id: assetId,
+      // Sin cuenta la operación se registra igual: la columna es opcional. Lo
+      // que se pierde es poder distinguir después qué está en el broker y qué
+      // en un exchange, y eso no se puede reconstruir.
+      account_id: accountId || null,
       tx_type: tipo,
       quantity: cantidad,
       unit_price: precio,
@@ -235,6 +251,23 @@ export function Operaciones() {
               value={cuando}
               onChange={(e) => setCuando(e.target.value)}
             />
+            <Select
+              label="Cuenta"
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              hint={
+                cuentas.length === 0
+                  ? "No tenés cuentas cargadas. Podés agregarlas en Cuentas."
+                  : "Dónde ocurrió la operación."
+              }
+            >
+              <option value="">Sin especificar</option>
+              {cuentas.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
             <Field
               label="Cantidad"
               inputMode="decimal"
@@ -292,6 +325,7 @@ export function Operaciones() {
             { titulo: "Fecha" },
             { titulo: "Tipo" },
             { titulo: "Activo" },
+            { titulo: "Cuenta" },
             { titulo: "Cantidad", alineacion: "derecha" },
             { titulo: "Precio", alineacion: "derecha" },
             { titulo: "Comisión", alineacion: "derecha" },

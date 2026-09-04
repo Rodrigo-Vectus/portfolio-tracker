@@ -126,6 +126,7 @@ export function Select({
       >
         {children}
       </select>
+      {hint && <p className="mt-1.5 text-sm text-text-faint">{hint}</p>}
     </label>
   );
 }
