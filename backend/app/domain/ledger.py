@@ -21,6 +21,23 @@ from enum import Enum
 from app.domain.money import Money, Numeric, to_decimal
 
 
+def _legible(cantidad: Decimal) -> str:
+    """Cantidad sin ceros de relleno, para mensajes dirigidos a una persona.
+
+    Las columnas son NUMERIC(38,18), asi que una tenencia de diez unidades
+    llega como `10.000000000000000000`. Mostrarlo asi en un mensaje de error
+    obliga a contar ceros para entender que dice.
+
+    Solo afecta la presentacion del mensaje. El valor comparado sigue siendo el
+    Decimal exacto.
+    """
+    normalizada = cantidad.normalize()
+    # normalize() de un entero grande produce notacion exponencial (1E+2).
+    if normalizada == normalizada.to_integral_value():
+        normalizada = normalizada.quantize(Decimal(1))
+    return format(normalizada, "f")
+
+
 class LedgerError(Exception):
     """Operacion invalida."""
 
@@ -41,7 +58,8 @@ class InsufficientHoldings(LedgerError):
         self.requested = requested
         self.available = available
         super().__init__(
-            f"{symbol}: se intenta vender {requested} y hay {available} disponibles."
+            f"{symbol}: se intenta vender {_legible(requested)} y hay "
+            f"{_legible(available)} disponibles."
         )
 
 

@@ -36,7 +36,16 @@ class DecimalOut(BaseModel):
 
     @field_serializer("*", when_used="json")
     def _decimales_como_string(self, value):  # noqa: ANN001, ANN202
-        return str(value) if isinstance(value, Decimal) else value
+        """Decimal a texto en notacion posicional, nunca cientifica.
+
+        `str(Decimal("0.000000000000000000"))` devuelve `"0E-18"`: Python usa
+        notacion exponencial cuando el coeficiente es cero. Es un numero
+        valido, pero ningun cliente espera leerlo asi, y un formateador que no
+        lo reconozca lo muestra crudo en pantalla.
+
+        `format(value, "f")` fuerza la forma posicional sin perder un digito.
+        """
+        return format(value, "f") if isinstance(value, Decimal) else value
 
 
 # --------------------------------------------------------------------- activos

@@ -6,14 +6,10 @@ import { Admin } from "./pages/Admin";
 import { ChangePassword } from "./pages/ChangePassword";
 import { Configuracion } from "./pages/Configuracion";
 import { Login } from "./pages/Login";
-import {
-  Activos,
-  Dashboard,
-  Historial,
-  Operaciones,
-  Portfolio,
-  Rendimiento,
-} from "./pages/Secciones";
+import { Dashboard, Historial, Rendimiento } from "./pages/Secciones";
+import { Activos } from "./pages/Activos";
+import { Operaciones } from "./pages/Operaciones";
+import { Portfolio } from "./pages/Portfolio";
 import { Estado } from "./pages/Estado";
 
 export default function App() {

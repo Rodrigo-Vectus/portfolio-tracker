@@ -266,3 +266,37 @@ def test_el_consumo_de_lotes_queda_registrado() -> None:
     consumos = [(c.lot_id, c.quantity) for c in ledger.consumptions]
     assert consumos == [("lot:c1", Decimal(10)), ("lot:c2", Decimal(2))]
     assert ledger.quantity == Decimal(8)
+
+
+def test_el_mensaje_de_tenencia_insuficiente_es_legible() -> None:
+    """Las columnas son NUMERIC(38,18) y el mensaje lo lee una persona.
+
+    "hay 10.000000000000000000 disponibles" obliga a contar ceros para
+    entender qué dice. El valor comparado sigue siendo el Decimal exacto: lo
+    que cambia es sólo cómo se escribe.
+    """
+    ops = [
+        tx("c1", TxType.BUY, "10", "100", 1),
+        tx("v1", TxType.SELL, "25", "150", 2),
+    ]
+    with pytest.raises(InsufficientHoldings) as exc:
+        realized_fifo(ops)
+
+    mensaje = str(exc.value)
+    assert "hay 10 disponibles" in mensaje
+    assert "10.000000" not in mensaje
+
+
+def test_el_mensaje_conserva_los_decimales_que_importan() -> None:
+    """Recortar ceros de relleno no es lo mismo que redondear.
+
+    Media unidad de una cripto tiene que seguir viéndose como 0,5.
+    """
+    ops = [
+        tx("c1", TxType.BUY, "0.25", "100", 1, symbol="BTC"),
+        tx("v1", TxType.SELL, "0.5", "150", 2, symbol="BTC"),
+    ]
+    with pytest.raises(InsufficientHoldings) as exc:
+        realized_fifo(ops)
+    assert "vender 0.5" in str(exc.value)
+    assert "hay 0.25" in str(exc.value)
