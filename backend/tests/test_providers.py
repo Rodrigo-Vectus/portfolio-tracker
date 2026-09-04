@@ -99,15 +99,17 @@ def test_una_casa_desconocida_se_rechaza_al_construir() -> None:
 
 
 def test_data912_no_inventa_la_fecha_de_cotizacion() -> None:
-    """El proveedor no la informa, así que queda en None (D33).
+    """El proveedor no la informa, así que `quoted_at` queda en None (D33).
 
-    Es el punto más débil de la fase: hoy es la única fuente de CEDEARs y no
-    permite saber si un precio es de hoy o del viernes pasado.
+    La antigüedad se infiere aparte, en `momento_estimado`, desde el horario
+    de rueda (D34-bis). Son campos distintos: copiar la estimación al primero
+    convertiría una inferencia en un dato del proveedor.
     """
     cotizaciones = Data912Provider().parse(DATA912, fetched_at=AHORA)
     assert all(c.quoted_at is None for c in cotizaciones)
     assert all(not c.es_confiable for c in cotizaciones)
-    assert all(c.frescura(AHORA) is Frescura.SIN_FECHA for c in cotizaciones)
+    assert all(c.momento_estimado is not None for c in cotizaciones)
+    assert all(c.frescura(AHORA) is Frescura.ESTIMADA for c in cotizaciones)
 
 
 def test_data912_filtra_por_simbolo() -> None:

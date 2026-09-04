@@ -23,6 +23,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.domain.market import Cotizacion
+from app.domain.rueda import momento_inferido
 from app.services.providers.base import MarketDataProvider, cargar_json
 
 
@@ -69,8 +70,13 @@ class Data912Provider(MarketDataProvider):
                     currency="ARS",
                     source="data912",
                     fetched_at=fetched_at,
-                    # El proveedor no lo informa. No se rellena (D33).
+                    # El proveedor no lo informa y no se rellena (D33).
                     quoted_at=None,
+                    # Se infiere desde el horario de rueda (D34-bis), en un
+                    # campo aparte. Copiarlo a `quoted_at` convertiría una
+                    # estimación en un hecho, que es exactamente el error que
+                    # este proyecto existe para no repetir.
+                    momento_estimado=momento_inferido(fetched_at),
                     asset_type="CEDEAR",
                 )
             )

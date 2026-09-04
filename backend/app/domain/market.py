@@ -24,8 +24,12 @@ class Frescura(str, Enum):
     FRESCA = "FRESCA"
     #: Superó el umbral para su tipo de activo. Se muestra, pero marcada.
     VIEJA = "VIEJA"
-    #: El proveedor no dijo cuando se cotizó (D33). Sólo se sabe cuándo se
-    #: pidió, que no es lo mismo: entre una cosa y la otra puede haber días.
+    #: El proveedor no dijo cuándo se cotizó (D33), pero se pudo inferir la
+    #: antigüedad desde el horario de rueda. Se muestra y se marca: es un dato
+    #: real de fuente conocida con una limitación declarada, que no es lo mismo
+    #: que un número presentado como algo que no es.
+    ESTIMADA = "ESTIMADA"
+    #: Ni fecha del proveedor ni forma de inferirla.
     SIN_FECHA = "SIN_FECHA"
     #: No hay ninguna cotización para este activo.
     AUSENTE = "AUSENTE"
@@ -62,6 +66,10 @@ class Cotizacion:
     fetched_at: datetime
     quoted_at: datetime | None = None
     asset_type: str = "CEDEAR"
+    #: Antigüedad inferida cuando el proveedor no informa `quoted_at`. Nunca
+    #: se copia a `quoted_at`: son cosas distintas y confundirlas es el error
+    #: que este proyecto existe para no repetir.
+    momento_estimado: datetime | None = None
 
     @property
     def money(self) -> Money:
@@ -78,10 +86,20 @@ class Cotizacion:
         return ahora - self.quoted_at
 
     def frescura(self, ahora: datetime) -> Frescura:
-        if self.quoted_at is None:
+        """Qué tan confiable es la edad de este precio.
+
+        Cuando el proveedor no informa la fecha se infiere desde el horario de
+        rueda (D34-bis). La inferencia igual puede quedar vieja: un precio de
+        cierre de hace cinco días es viejo aunque sepamos de qué cierre es.
+        """
+        momento = self.quoted_at or self.momento_estimado
+        if momento is None:
             return Frescura.SIN_FECHA
+
         umbral = UMBRALES.get(self.asset_type, UMBRALES["CEDEAR"])
-        return Frescura.FRESCA if (ahora - self.quoted_at) <= umbral else Frescura.VIEJA
+        if (ahora - momento) > umbral:
+            return Frescura.VIEJA
+        return Frescura.FRESCA if self.quoted_at is not None else Frescura.ESTIMADA
 
     @property
     def es_confiable(self) -> bool:
@@ -109,10 +127,14 @@ class ValorDePosicion:
 class TotalDeCartera:
     """Total de la cartera, con su propia declaración de completitud.
 
-    **El total no se presenta como un número confiable si alguna posición no
-    tiene precio fresco** (D34). Una posición vieja marcada se lee como vieja;
-    un total con una posición vieja adentro se lee como completo, y ahí está
-    el engaño: el color de una fila no viaja hasta la suma.
+    Regla vigente (D34-bis): el total **no se muestra** si a alguna posición
+    le falta el precio o lo tiene viejo. Sí se muestra, marcado como estimado,
+    cuando la antigüedad es inferida desde el horario de rueda.
+
+    El motivo de la distinción: un total con una posición vieja adentro se lee
+    como completo, y el color de una fila no viaja hasta la suma. Un total
+    estimado, en cambio, es un número real de fuente conocida cuya limitación
+    se puede escribir al lado.
     """
 
     total: Money | None
@@ -120,15 +142,28 @@ class TotalDeCartera:
     posiciones_sin_precio: int
     posiciones_con_precio_viejo: int
     posiciones_sin_fecha: int
+    posiciones_estimadas: int
     currency: str
 
     @property
     def es_completo(self) -> bool:
+        """Todas las posiciones con precio fresco y fecha del proveedor."""
         return (
             self.posiciones_sin_precio == 0
             and self.posiciones_con_precio_viejo == 0
             and self.posiciones_sin_fecha == 0
+            and self.posiciones_estimadas == 0
         )
+
+    @property
+    def es_estimado(self) -> bool:
+        """El total se calculó, pero alguna antigüedad es inferida.
+
+        La interfaz debe mostrarlo distinto de un total completo. No es una
+        sutileza: es la diferencia entre "tu cartera vale esto" y "tu cartera
+        vale esto según el último cierre conocido".
+        """
+        return self.total is not None and self.posiciones_estimadas > 0
 
     @property
     def motivo_incompleto(self) -> str | None:
@@ -136,6 +171,10 @@ class TotalDeCartera:
         if self.es_completo:
             return None
         partes = []
+        if self.posiciones_estimadas:
+            partes.append(
+                f"{self.posiciones_estimadas} con antigüedad estimada"
+            )
         if self.posiciones_sin_precio:
             partes.append(f"{self.posiciones_sin_precio} sin cotización")
         if self.posiciones_con_precio_viejo:
@@ -157,9 +196,13 @@ def totalizar(
     sin_precio = sum(1 for v in valores if v.cotizacion is None)
     viejas = sum(1 for v in valores if v.frescura is Frescura.VIEJA)
     sin_fecha = sum(1 for v in valores if v.frescura is Frescura.SIN_FECHA)
+    estimadas = sum(1 for v in valores if v.frescura is Frescura.ESTIMADA)
 
+    # Una antigüedad estimada NO invalida el total (D34-bis): lo marca. Un
+    # precio viejo o ausente sí lo invalida, porque ahí no hay número que
+    # valga la pena mostrar.
     total: Money | None = None
-    if sin_precio == 0 and valores:
+    if sin_precio == 0 and viejas == 0 and sin_fecha == 0 and valores:
         acumulado = Money.zero(currency)
         for v in valores:
             monto = v.valor
@@ -169,12 +212,12 @@ def totalizar(
             acumulado = acumulado + monto
         total = acumulado
 
-    completo = sin_precio == 0 and viejas == 0 and sin_fecha == 0
     return TotalDeCartera(
-        total=total if completo else None,
+        total=total,
         posiciones_totales=len(valores),
         posiciones_sin_precio=sin_precio,
         posiciones_con_precio_viejo=viejas,
         posiciones_sin_fecha=sin_fecha,
+        posiciones_estimadas=estimadas,
         currency=currency,
     )

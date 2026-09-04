@@ -20,7 +20,13 @@ from app.domain.market import (
 AHORA = datetime(2026, 9, 4, 20, 0, tzinfo=UTC)
 
 
-def cotiz(precio: str, *, hace: timedelta | None = None, tipo: str = "CEDEAR"):
+def cotiz(
+    precio: str,
+    *,
+    hace: timedelta | None = None,
+    tipo: str = "CEDEAR",
+    estimado_hace: timedelta | None = None,
+):
     return Cotizacion(
         symbol="AAPL",
         price=Decimal(precio),
@@ -29,6 +35,7 @@ def cotiz(precio: str, *, hace: timedelta | None = None, tipo: str = "CEDEAR"):
         fetched_at=AHORA,
         quoted_at=None if hace is None else AHORA - hace,
         asset_type=tipo,
+        momento_estimado=None if estimado_hace is None else AHORA - estimado_hace,
     )
 
 
@@ -42,6 +49,29 @@ def pos(cantidad: str, cotizacion, frescura: Frescura) -> ValorDePosicion:
 
 
 # ------------------------------------------------------------------ frescura
+
+
+def test_una_estimacion_no_se_confunde_con_un_hecho() -> None:
+    """`quoted_at` sigue en None aunque haya estimación.
+
+    Son campos distintos a propósito. Copiar la estimación a `quoted_at`
+    convertiría una inferencia en un dato del proveedor, y después nadie
+    podría distinguirlos.
+    """
+    c = cotiz("20960", estimado_hace=timedelta(hours=3))
+    assert c.quoted_at is None
+    assert not c.es_confiable
+    assert c.frescura(AHORA) is Frescura.ESTIMADA
+
+
+def test_una_estimacion_vieja_sigue_siendo_vieja() -> None:
+    """Saber de qué cierre es un precio no lo vuelve actual.
+
+    Un precio del cierre de hace cinco días es viejo aunque sepamos
+    exactamente de cuándo es.
+    """
+    c = cotiz("20960", estimado_hace=timedelta(days=5))
+    assert c.frescura(AHORA) is Frescura.VIEJA
 
 
 def test_sin_fecha_del_proveedor_no_se_puede_saber_la_antiguedad() -> None:
@@ -99,8 +129,30 @@ def test_una_sola_posicion_vieja_invalida_el_total() -> None:
     assert "1 con precio viejo" in t.motivo_incompleto
 
 
-def test_una_posicion_sin_fecha_tambien_invalida_el_total() -> None:
-    """Es el caso real de los CEDEARs: data912 no informa cuándo se cotizó."""
+def test_una_antiguedad_estimada_no_invalida_el_total_pero_lo_marca() -> None:
+    """D34-bis. Es el caso real de los CEDEARs.
+
+    `data912` no informa cuándo se cotizó, pero la antigüedad se infiere desde
+    el horario de rueda. Ocultar el total dejaría al usuario sin lo que más le
+    importa; mostrarlo sin marcar sería presentar una estimación como un
+    hecho. Se muestra y se marca.
+    """
+    valores = [
+        pos("10", cotiz("20960", estimado_hace=timedelta(hours=3)), Frescura.ESTIMADA),
+        pos("5", cotiz("25000", hace=timedelta(hours=1)), Frescura.FRESCA),
+    ]
+    t = totalizar(valores, "ARS", AHORA)
+
+    assert t.total is not None
+    assert t.total.amount == Decimal(10) * Decimal(20960) + Decimal(5) * Decimal(25000)
+    # Se calculó, pero no es lo mismo que un total completo.
+    assert not t.es_completo
+    assert t.es_estimado
+    assert "1 con antigüedad estimada" in t.motivo_incompleto
+
+
+def test_una_posicion_sin_ninguna_fecha_si_invalida_el_total() -> None:
+    """Sin fecha del proveedor y sin forma de inferirla, no hay número.""" 
     valores = [
         pos("10", cotiz("20960"), Frescura.SIN_FECHA),
         pos("5", cotiz("25000", hace=timedelta(hours=1)), Frescura.FRESCA),
@@ -127,12 +179,14 @@ def test_el_motivo_acumula_todos_los_problemas() -> None:
         pos("1", None, Frescura.AUSENTE),
         pos("1", cotiz("100", hace=timedelta(days=5)), Frescura.VIEJA),
         pos("1", cotiz("100"), Frescura.SIN_FECHA),
+        pos("1", cotiz("100", estimado_hace=timedelta(hours=2)), Frescura.ESTIMADA),
     ]
     t = totalizar(valores, "ARS", AHORA)
     motivo = t.motivo_incompleto
     assert "1 sin cotización" in motivo
     assert "1 con precio viejo" in motivo
     assert "1 sin fecha de cotización" in motivo
+    assert "1 con antigüedad estimada" in motivo
 
 
 def test_una_cartera_vacia_no_finge_un_total_en_cero() -> None:
