@@ -22,6 +22,7 @@ from app.models.enums_finance import (
     TransactionType,
 )
 from app.models.lots import CostLot, LotConsumption, PositionCache
+from app.models.market import FxRate, PriceQuote, ProviderLog
 from app.models.refresh_token import RefreshToken
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -40,9 +41,12 @@ __all__ = [
     "CorporateActionType",
     "CostLot",
     "DataOrigin",
+    "FxRate",
     "LotConsumption",
     "Portfolio",
     "PositionCache",
+    "PriceQuote",
+    "ProviderLog",
     "RefreshToken",
     "Transaction",
     "TransactionStatus",
