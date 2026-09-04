@@ -25,3 +25,9 @@ class AuditAction(StrEnum):
     USER_UPDATED = "USER_UPDATED"
     USER_DEACTIVATED = "USER_DEACTIVATED"
     USER_ACTIVATED = "USER_ACTIVATED"
+    # Fase 2: el libro de operaciones es inmutable, asi que su rastro tambien
+    # tiene que serlo. Una anulacion sin registro de quien y por que es un
+    # borrado con otro nombre.
+    TRANSACTION_CREATED = "TRANSACTION_CREATED"
+    TRANSACTION_VOIDED = "TRANSACTION_VOIDED"
+    POSITIONS_REBUILT = "POSITIONS_REBUILT"

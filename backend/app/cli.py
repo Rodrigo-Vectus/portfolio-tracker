@@ -1,6 +1,7 @@
 """Comandos de mantenimiento.
 
-    python -m app.cli seed-admin     crea o repara el administrador inicial
+    python -m app.cli seed-admin           crea o repara el administrador inicial
+    python -m app.cli rebuild-positions    recalcula posiciones desde el libro
 
 Es idempotente: si el administrador ya existe no lo pisa, solo informa. La
 contrasena sale de INITIAL_ADMIN_PASSWORD y nunca queda en el codigo ni en
@@ -16,7 +17,8 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.security import hash_password
 from app.db.session import SessionLocal
-from app.models import AuditAction, AuditLog, User, UserRole
+from app.models import AuditAction, AuditLog, Portfolio, User, UserRole
+from app.services.positions import rebuild_portfolio
 
 settings = get_settings()
 configure_logging()
@@ -75,14 +77,59 @@ async def seed_admin() -> int:
         return 0
 
 
+async def rebuild_positions(portfolio_id: str | None = None) -> int:
+    """Reconstruye el cache de posiciones desde el libro de operaciones.
+
+    Existe porque la arquitectura lo exige: todo dato derivado tiene que
+    poder rehacerse desde cero. Si el cache y el libro discrepan alguna vez,
+    esto los reconcilia tomando el libro como verdad.
+
+    Es seguro de correr en cualquier momento: no toca ninguna operacion, solo
+    lo derivado.
+    """
+    async with SessionLocal() as session:
+        query = select(Portfolio)
+        if portfolio_id:
+            query = query.where(Portfolio.id == portfolio_id)
+        portfolios = (await session.execute(query)).scalars().all()
+
+        if not portfolios:
+            log.warning("rebuild_positions.sin_portfolios")
+            return 0
+
+        for portfolio in portfolios:
+            activos = await rebuild_portfolio(
+                session, user_id=portfolio.user_id, portfolio_id=portfolio.id
+            )
+            session.add(
+                AuditLog(
+                    user_id=portfolio.user_id,
+                    action=AuditAction.POSITIONS_REBUILT,
+                    entity_type="portfolio",
+                    entity_id=str(portfolio.id),
+                    details={"activos": activos, "origen": "cli"},
+                )
+            )
+            log.info(
+                "rebuild_positions.done",
+                portfolio=portfolio.name,
+                activos=activos,
+            )
+        await session.commit()
+        return 0
+
+
 def main() -> None:
     if len(sys.argv) < 2:
-        print("uso: python -m app.cli seed-admin")
+        print("uso: python -m app.cli [seed-admin|rebuild-positions]")
         raise SystemExit(2)
 
     command = sys.argv[1]
     if command == "seed-admin":
         raise SystemExit(asyncio.run(seed_admin()))
+    if command == "rebuild-positions":
+        arg = sys.argv[2] if len(sys.argv) > 2 else None
+        raise SystemExit(asyncio.run(rebuild_positions(arg)))
 
     print(f"comando desconocido: {command}")
     raise SystemExit(2)
