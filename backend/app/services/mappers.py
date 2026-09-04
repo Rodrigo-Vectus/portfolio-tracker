@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from app.core.timezones import con_zona
 from app.domain.cost_basis import CostLot as DomainLot
 from app.domain.ledger import Transaction as DomainTx
 from app.domain.ledger import TxStatus, TxType
@@ -37,7 +38,11 @@ def to_domain(row: OrmTx, *, symbol: str) -> DomainTx:
         quantity=row.quantity,
         unit_price=row.unit_price,
         currency=row.price_currency,
-        executed_at=row.executed_at,
+        # Segunda barrera. El historial sale de PostgreSQL con zona, pero una
+        # fila recien construida en memoria puede no tenerla, y mezclarlas al
+        # ordenar rompe el motor de lotes con un error que aparece lejos de su
+        # causa. El importador de la Fase 2.5 entra por aca tambien.
+        executed_at=con_zona(row.executed_at),
         trade_date=row.trade_date,
         commission=row.commission or Decimal(0),
         taxes=row.taxes or Decimal(0),

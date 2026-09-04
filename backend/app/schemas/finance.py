@@ -1,0 +1,193 @@
+"""Contratos de la API financiera.
+
+**Todo importe y cantidad se serializa como string.** No es una rareza: en
+JSON los numeros son de doble precision, asi que un `NUMERIC(38,18)` que sale
+como numero pierde exactitud en el camino y el navegador recibe algo distinto
+de lo que hay en la base. Un string cruza intacto y el frontend decide como
+mostrarlo.
+
+Es la misma regla que rige en la base y en el dominio, aplicada al ultimo
+tramo. De nada sirve `Decimal` de punta a punta si el JSON lo degrada al
+salir.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+
+from app.core.timezones import a_utc
+
+from app.models.enums_finance import (
+    AccountType,
+    AssetType,
+    TransactionStatus,
+    TransactionType,
+)
+
+
+class DecimalOut(BaseModel):
+    """Base para respuestas: los Decimal salen como string."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("*", when_used="json")
+    def _decimales_como_string(self, value):  # noqa: ANN001, ANN202
+        return str(value) if isinstance(value, Decimal) else value
+
+
+# --------------------------------------------------------------------- activos
+
+
+class AssetIn(BaseModel):
+    symbol: str = Field(min_length=1, max_length=32)
+    name: str = Field(min_length=1, max_length=160)
+    asset_type: AssetType
+    currency: str = Field(min_length=2, max_length=8)
+    market: str | None = Field(default=None, max_length=16)
+    sector: str | None = Field(default=None, max_length=80)
+    display_precision: int = Field(default=2, ge=0, le=18)
+
+
+class AssetOut(DecimalOut):
+    id: UUID
+    symbol: str
+    name: str
+    asset_type: AssetType
+    currency: str
+    market: str | None
+    sector: str | None
+    display_precision: int
+    is_active: bool
+
+
+# -------------------------------------------------------- cuentas y portfolios
+
+
+class AccountIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    account_type: AccountType
+    country: str | None = Field(default=None, max_length=2)
+    default_currency: str = Field(default="ARS", max_length=8)
+
+
+class AccountOut(DecimalOut):
+    id: UUID
+    name: str
+    account_type: AccountType
+    country: str | None
+    default_currency: str
+    is_active: bool
+
+
+class PortfolioIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    base_currency: str = Field(default="USD", max_length=8)
+    is_default: bool = False
+
+
+class PortfolioOut(DecimalOut):
+    id: UUID
+    name: str
+    base_currency: str
+    is_default: bool
+
+
+# ----------------------------------------------------------------- operaciones
+
+
+class TransactionIn(BaseModel):
+    """Alta de una operacion.
+
+    La cantidad entra como string y siempre positiva. El signo lo lleva
+    `tx_type`: aceptar un numero negativo reintroduciria la convencion de la
+    planilla anterior, donde una venta era una cantidad negativa y la columna
+    de precio de compra guardaba en realidad el precio de venta.
+    """
+
+    portfolio_id: UUID
+    asset_id: UUID | None = None
+    account_id: UUID | None = None
+    tx_type: TransactionType
+    quantity: Decimal = Field(gt=0)
+    unit_price: Decimal = Field(ge=0)
+    price_currency: str = Field(min_length=2, max_length=8)
+    settlement_currency: str | None = Field(default=None, max_length=8)
+    commission: Decimal = Field(default=Decimal(0), ge=0)
+    taxes: Decimal = Field(default=Decimal(0), ge=0)
+    fx_rate_used: Decimal | None = Field(default=None, gt=0)
+    fx_source: str | None = Field(default=None, max_length=40)
+    executed_at: datetime
+    trade_date: date | None = None
+    notes: str | None = None
+    external_id: str | None = Field(default=None, max_length=64)
+
+    @field_validator("executed_at")
+    @classmethod
+    def _normalizar_zona(cls, value: datetime) -> datetime:
+        """Una fecha sin zona se interpreta en la zona configurada del sistema.
+
+        Es la convencion de la API y esta documentada tambien en el endpoint.
+        No se asume UTC: una compra de las 22:30 en Buenos Aires quedaria
+        fechada al dia siguiente y su `trade_date` saldria en otra rueda.
+
+        Si el cliente manda offset explicito, se respeta.
+        """
+        return a_utc(value)
+
+
+class TransactionVoidIn(BaseModel):
+    """Anular exige motivo. Sin motivo es un borrado con otro nombre."""
+
+    motivo: str = Field(min_length=3, max_length=255)
+
+
+class TransactionOut(DecimalOut):
+    id: UUID
+    portfolio_id: UUID
+    asset_id: UUID | None
+    account_id: UUID | None
+    tx_type: TransactionType
+    quantity: Decimal
+    unit_price: Decimal
+    price_currency: str
+    settlement_currency: str
+    commission: Decimal
+    taxes: Decimal
+    gross_amount: Decimal | None
+    net_amount: Decimal | None
+    fx_rate_used: Decimal | None
+    fx_source: str | None
+    executed_at: datetime
+    trade_date: date
+    status: TransactionStatus
+    voided_reason: str | None
+    notes: str | None
+
+
+# ------------------------------------------------------------------ posiciones
+
+
+class PositionOut(DecimalOut):
+    """Posicion derivada del libro.
+
+    **No trae precio ni valor actual, y no es un olvido.** Esta fase no tiene
+    cotizaciones: inventar un valor de mercado seria exactamente el error que
+    origino el proyecto. El valor actual llega en la Fase 4, y va a viajar con
+    su `as_of`, su fuente y su marca de dato viejo.
+    """
+
+    asset_id: UUID
+    symbol: str
+    asset_type: AssetType
+    quantity: Decimal
+    average_cost: Decimal | None
+    open_cost_basis: Decimal
+    realized_pnl: Decimal
+    cost_method: str
+    currency: str
+    last_transaction_at: datetime | None
+    computed_at: datetime | None
