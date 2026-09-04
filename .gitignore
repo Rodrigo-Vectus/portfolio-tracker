@@ -36,3 +36,7 @@ data/
 
 # Artefactos de entrega
 *.tar.gz
+
+# historial financiero real: nunca al repositorio
+*.xlsx
+*.xls
