@@ -87,17 +87,70 @@ def _operacion(s: Sesion, portfolio, asset, tipo, cantidad, precio, dia, **extra
 # ------------------------------------------------------- registrar y posicion
 
 
+def _posiciones(s: Sesion, portfolio) -> list:
+    return s.get(f"/api/positions?portfolio_id={portfolio['id']}").json()["positions"]
+
+
+def _total(s: Sesion, portfolio) -> dict:
+    return s.get(f"/api/positions?portfolio_id={portfolio['id']}").json()["total"]
+
+
 def test_una_compra_produce_la_posicion(sesion: Sesion) -> None:
     activo = _alta_activo(sesion)
     portfolio = _alta_portfolio(sesion)
 
     assert _operacion(sesion, portfolio, activo, "BUY", 10, 100, 1).status_code == 201
 
-    posiciones = sesion.get(f"/api/positions?portfolio_id={portfolio['id']}").json()
+    posiciones = _posiciones(sesion, portfolio)
     assert len(posiciones) == 1
     assert Decimal(posiciones[0]["quantity"]) == Decimal(10)
     assert Decimal(posiciones[0]["open_cost_basis"]) == Decimal(1000)
     assert Decimal(posiciones[0]["average_cost"]) == Decimal(100)
+
+
+def test_sin_cotizacion_el_valor_es_nulo_y_no_cero(sesion: Sesion) -> None:
+    """"No sé cuánto vale" y "no vale nada" son afirmaciones distintas.
+
+    Un cero en la columna de valor actual se lee como una pérdida total. Por
+    eso el campo viene en `null` y el frontend lo muestra como un guion.
+    """
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion)
+    _operacion(sesion, portfolio, activo, "BUY", 10, 100, 1)
+
+    p = _posiciones(sesion, portfolio)[0]
+    assert p["current_price"] is None
+    assert p["current_value"] is None
+    assert p["unrealized_pnl"] is None
+    assert p["price_status"] == "AUSENTE"
+    # El costo, que sale del libro y no del mercado, sí está.
+    assert Decimal(p["open_cost_basis"]) == Decimal(1000)
+
+
+def test_sin_cotizacion_el_total_no_se_muestra_y_explica_por_que(
+    sesion: Sesion,
+) -> None:
+    """Un total incompleto se lee como completo. Por eso no se entrega."""
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion)
+    _operacion(sesion, portfolio, activo, "BUY", 10, 100, 1)
+
+    t = _total(sesion, portfolio)
+    assert t["total"] is None
+    assert not t["es_completo"]
+    assert t["posiciones_sin_precio"] == 1
+    assert "sin cotización" in t["motivo"]
+
+
+def test_una_posicion_cerrada_no_aparece_en_el_listado(sesion: Sesion) -> None:
+    """No hay nada que valuar cuando no queda tenencia."""
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion)
+    _operacion(sesion, portfolio, activo, "BUY", 10, 100, 1)
+    _operacion(sesion, portfolio, activo, "SELL", 10, 150, 2)
+
+    assert _posiciones(sesion, portfolio) == []
+    assert _total(sesion, portfolio)["posiciones_totales"] == 0
 
 
 def test_los_decimales_viajan_como_string(sesion: Sesion) -> None:
@@ -110,7 +163,7 @@ def test_los_decimales_viajan_como_string(sesion: Sesion) -> None:
     portfolio = _alta_portfolio(sesion)
     _operacion(sesion, portfolio, activo, "BUY", 3, "100.333333333", 1)
 
-    posicion = sesion.get(f"/api/positions?portfolio_id={portfolio['id']}").json()[0]
+    posicion = _posiciones(sesion, portfolio)[0]
     assert isinstance(posicion["quantity"], str)
     assert isinstance(posicion["open_cost_basis"], str)
 
@@ -129,7 +182,7 @@ def test_compra_venta_deja_la_posicion_y_el_realizado(sesion: Sesion) -> None:
     _operacion(sesion, portfolio, activo, "BUY", 10, 200, 2)
     assert _operacion(sesion, portfolio, activo, "SELL", 12, 250, 3).status_code == 201
 
-    posicion = sesion.get(f"/api/positions?portfolio_id={portfolio['id']}").json()[0]
+    posicion = _posiciones(sesion, portfolio)[0]
     assert Decimal(posicion["quantity"]) == Decimal(8)
     assert Decimal(posicion["realized_pnl"]) == Decimal(1200)
     assert Decimal(posicion["open_cost_basis"]) == Decimal(1200)
@@ -150,7 +203,7 @@ def test_vender_mas_de_lo_que_hay_es_rechazado(sesion: Sesion) -> None:
     assert "13" in r.json()["detail"]
 
     # El rechazo no debe dejar rastro: la tenencia sigue intacta.
-    posicion = sesion.get(f"/api/positions?portfolio_id={portfolio['id']}").json()[0]
+    posicion = _posiciones(sesion, portfolio)[0]
     assert Decimal(posicion["quantity"]) == Decimal(13)
     operaciones = sesion.get(f"/api/transactions?portfolio_id={portfolio['id']}").json()
     assert len(operaciones) == 1
@@ -186,7 +239,7 @@ def test_se_mezclan_fechas_con_y_sin_zona(sesion: Sesion) -> None:
     tercera = _operacion(sesion, portfolio, activo, "SELL", 3, 300, 3)
     assert tercera.status_code == 201, tercera.text
 
-    posicion = sesion.get(f"/api/positions?portfolio_id={portfolio['id']}").json()[0]
+    posicion = _posiciones(sesion, portfolio)[0]
     assert Decimal(posicion["quantity"]) == Decimal(12)
 
 
@@ -234,7 +287,7 @@ def test_anular_exige_motivo_y_recalcula(sesion: Sesion) -> None:
     assert len(activas) == 1
     assert len(todas) == 2
 
-    posicion = sesion.get(f"/api/positions?portfolio_id={portfolio['id']}").json()[0]
+    posicion = _posiciones(sesion, portfolio)[0]
     assert Decimal(posicion["quantity"]) == Decimal(5)
 
 
@@ -258,7 +311,7 @@ def test_no_se_puede_anular_una_compra_que_dejaria_una_venta_descubierta(
     assert "historial posterior" in r.json()["detail"]
 
     # Nada cambio.
-    posicion = sesion.get(f"/api/positions?portfolio_id={portfolio['id']}").json()[0]
+    posicion = _posiciones(sesion, portfolio)[0]
     assert Decimal(posicion["quantity"]) == Decimal(2)
 
 

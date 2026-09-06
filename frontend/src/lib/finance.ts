@@ -76,12 +76,20 @@ export interface Transaction {
   notes: string | null;
 }
 
+/** Calidad de la antigüedad de un precio. */
+export type PriceStatus =
+  | "FRESCA"
+  | "ESTIMADA"
+  | "VIEJA"
+  | "SIN_FECHA"
+  | "AUSENTE";
+
 /**
- * Posición derivada del libro.
+ * Posición derivada del libro, con su valuación cuando existe.
  *
- * **No trae precio ni valor actual.** No falta: en esta fase el sistema no
- * tiene cotizaciones, y mostrar un valor de mercado inventado sería el error
- * que originó el proyecto. Llega en la fase 4, con su fecha y su fuente.
+ * **Todo lo de mercado puede venir en `null`, y eso es información.** Un
+ * `current_value` nulo dice "no sé cuánto vale"; un cero diría "no vale
+ * nada". La pantalla los muestra distinto.
  */
 export interface Position {
   asset_id: string;
@@ -95,6 +103,38 @@ export interface Position {
   currency: string;
   last_transaction_at: string | null;
   computed_at: string | null;
+
+  current_price: string | null;
+  current_value: string | null;
+  unrealized_pnl: string | null;
+  price_source: string | null;
+  price_as_of: string | null;
+  price_is_estimated: boolean;
+  price_status: PriceStatus;
+}
+
+/**
+ * Total de la cartera con su declaración de completitud.
+ *
+ * `total` viene en `null` cuando a alguna posición le falta el precio o lo
+ * tiene viejo. `motivo` explica por qué, para poder decirlo en pantalla en
+ * lugar de dejar un hueco.
+ */
+export interface Total {
+  total: string | null;
+  currency: string;
+  es_completo: boolean;
+  es_estimado: boolean;
+  motivo: string | null;
+  posiciones_totales: number;
+  posiciones_sin_precio: number;
+  posiciones_con_precio_viejo: number;
+  posiciones_estimadas: number;
+}
+
+export interface PositionsResponse {
+  positions: Position[];
+  total: Total;
 }
 
 export interface NuevaOperacion {
@@ -147,6 +187,6 @@ export const anularOperacion = (id: string, motivo: string) =>
   api.post<Transaction>(`/transactions/${id}/void`, { motivo }, true);
 
 export const fetchPositions = (portfolioId: string) =>
-  api.get<Position[]>(`/positions?portfolio_id=${portfolioId}`);
+  api.get<PositionsResponse>(`/positions?portfolio_id=${portfolioId}`);
 
 export type { ApiResult };

@@ -181,12 +181,15 @@ class TransactionOut(DecimalOut):
 
 
 class PositionOut(DecimalOut):
-    """Posicion derivada del libro.
+    """Posición derivada del libro, con su valuación cuando existe.
 
-    **No trae precio ni valor actual, y no es un olvido.** Esta fase no tiene
-    cotizaciones: inventar un valor de mercado seria exactamente el error que
-    origino el proyecto. El valor actual llega en la Fase 4, y va a viajar con
-    su `as_of`, su fuente y su marca de dato viejo.
+    **Todo lo de mercado puede venir en `None`, y eso es información.** Un
+    `current_value` nulo dice "no sé cuánto vale"; un cero diría "no vale
+    nada". No son lo mismo y el frontend los muestra distinto.
+
+    `price_as_of` y `price_is_estimated` viajan siempre con el precio: un
+    número de mercado sin su antigüedad es el problema que originó este
+    proyecto.
     """
 
     asset_id: UUID
@@ -200,3 +203,40 @@ class PositionOut(DecimalOut):
     currency: str
     last_transaction_at: datetime | None
     computed_at: datetime | None
+
+    # --- valuación (todo opcional: puede no haber cotización) ---
+    current_price: Decimal | None = None
+    current_value: Decimal | None = None
+    unrealized_pnl: Decimal | None = None
+    price_source: str | None = None
+    #: Cuándo se cotizó. Si es una estimación, `price_is_estimated` lo dice.
+    price_as_of: datetime | None = None
+    price_is_estimated: bool = False
+    #: FRESCA | ESTIMADA | VIEJA | SIN_FECHA | AUSENTE
+    price_status: str = "AUSENTE"
+
+
+class TotalOut(BaseModel):
+    """Total de la cartera, con su propia declaración de completitud.
+
+    `total` viene en `None` cuando a alguna posición le falta el precio o lo
+    tiene viejo. En ese caso `motivo` explica por qué, para que la interfaz
+    pueda decirlo en vez de mostrar un espacio vacío.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    total: str | None
+    currency: str
+    es_completo: bool
+    es_estimado: bool
+    motivo: str | None
+    posiciones_totales: int
+    posiciones_sin_precio: int
+    posiciones_con_precio_viejo: int
+    posiciones_estimadas: int
+
+
+class PositionsResponse(BaseModel):
+    positions: list[PositionOut]
+    total: TotalOut

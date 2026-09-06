@@ -22,14 +22,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import ActiveUser, require_csrf
 from app.core.timezones import fecha_de_rueda
 from app.db.session import get_session
-from app.models import Asset, PositionCache, Portfolio, Transaction, TransactionStatus
+from app.models import Portfolio, Transaction, TransactionStatus
 from app.schemas.finance import (
     PositionOut,
+    PositionsResponse,
+    TotalOut,
     TransactionIn,
     TransactionOut,
     TransactionVoidIn,
 )
 from app.services import transactions as tx_service
+from app.services.valuation import resultado_no_realizado, valuar_portfolio
 from app.services.transactions import TransactionServiceError
 
 router = APIRouter(tags=["operaciones"])
@@ -193,42 +196,78 @@ async def void_transaction(
 
 @router.get(
     "/positions",
-    response_model=list[PositionOut],
-    summary="Posiciones de un portfolio",
+    response_model=PositionsResponse,
+    summary="Posiciones de un portfolio, valuadas",
 )
 async def list_positions(
     portfolio_id: UUID, user: ActiveUser, session: Session
-) -> list[PositionOut]:
-    """Posiciones derivadas del libro.
+) -> PositionsResponse:
+    """Posiciones derivadas del libro, valuadas contra la última cotización.
 
-    Sin valor de mercado: en esta fase no hay cotizaciones y no se inventa
-    ninguna. La valuacion llega en la Fase 4 con su `as_of` y su fuente.
+    **Todo dato de mercado puede venir nulo.** Si no hay cotización para un
+    activo, su valor es `null`, no cero: "no sé cuánto vale" y "no vale nada"
+    son afirmaciones distintas.
+
+    El precio siempre viaja con su antigüedad y su fuente. Cuando el proveedor
+    no informa cuándo se cotizó, la antigüedad es una estimación desde el
+    horario de rueda y `price_is_estimated` lo dice.
+
+    El total se entrega en `null` si a alguna posición le falta el precio o lo
+    tiene viejo, con el motivo explicado: un total incompleto se lee como
+    completo, y el color de una fila no viaja hasta la suma.
     """
     await _portfolio_propio(session, user.id, portfolio_id)
 
-    result = await session.execute(
-        select(PositionCache, Asset)
-        .join(Asset, Asset.id == PositionCache.asset_id)
-        .where(
-            PositionCache.portfolio_id == portfolio_id,
-            PositionCache.user_id == user.id,
-        )
-        .order_by(Asset.symbol)
+    valuadas, total = await valuar_portfolio(
+        session, user_id=user.id, portfolio_id=portfolio_id
     )
 
-    return [
-        PositionOut(
-            asset_id=pos.asset_id,
-            symbol=asset.symbol,
-            asset_type=asset.asset_type,
-            quantity=pos.quantity,
-            average_cost=pos.average_cost,
-            open_cost_basis=pos.open_cost_basis,
-            realized_pnl=pos.realized_pnl,
-            cost_method=pos.cost_method,
-            currency=pos.currency,
-            last_transaction_at=pos.last_transaction_at,
-            computed_at=pos.computed_at,
+    posiciones = []
+    for pos, asset, valor in valuadas:
+        cotizacion = valor.cotizacion
+        monto = valor.valor
+        es_estimada = cotizacion is not None and cotizacion.quoted_at is None
+
+        posiciones.append(
+            PositionOut(
+                asset_id=pos.asset_id,
+                symbol=asset.symbol,
+                asset_type=asset.asset_type,
+                quantity=pos.quantity,
+                average_cost=pos.average_cost,
+                open_cost_basis=pos.open_cost_basis,
+                realized_pnl=pos.realized_pnl,
+                cost_method=pos.cost_method,
+                currency=pos.currency,
+                last_transaction_at=pos.last_transaction_at,
+                computed_at=pos.computed_at,
+                current_price=cotizacion.price if cotizacion else None,
+                current_value=monto.amount if monto else None,
+                unrealized_pnl=resultado_no_realizado(pos, valor),
+                price_source=cotizacion.source if cotizacion else None,
+                price_as_of=(
+                    (cotizacion.quoted_at or cotizacion.momento_estimado)
+                    if cotizacion
+                    else None
+                ),
+                price_is_estimated=es_estimada,
+                price_status=valor.frescura.value,
+            )
         )
-        for pos, asset in result.all()
-    ]
+
+    return PositionsResponse(
+        positions=posiciones,
+        total=TotalOut(
+            # String por lo mismo que el resto de los importes: un
+            # NUMERIC(38,18) serializado como número JSON pierde dígitos.
+            total=str(total.total.amount) if total.total else None,
+            currency=total.currency,
+            es_completo=total.es_completo,
+            es_estimado=total.es_estimado,
+            motivo=total.motivo_incompleto,
+            posiciones_totales=total.posiciones_totales,
+            posiciones_sin_precio=total.posiciones_sin_precio,
+            posiciones_con_precio_viejo=total.posiciones_con_precio_viejo,
+            posiciones_estimadas=total.posiciones_estimadas,
+        ),
+    )

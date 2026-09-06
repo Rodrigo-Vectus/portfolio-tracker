@@ -94,10 +94,12 @@ export function Num({
   children,
   tono = "neutro",
   className = "",
+  title,
 }: {
   children: ReactNode;
   tono?: "neutro" | "positivo" | "negativo" | "tenue";
   className?: string;
+  title?: string;
 }) {
   const color =
     tono === "positivo"
@@ -107,7 +109,11 @@ export function Num({
         : tono === "tenue"
           ? "text-text-faint"
           : "";
-  return <span className={`num tabular-nums ${color} ${className}`}>{children}</span>;
+  return (
+    <span className={`num tabular-nums ${color} ${className}`} title={title}>
+      {children}
+    </span>
+  );
 }
 
 export function Select({

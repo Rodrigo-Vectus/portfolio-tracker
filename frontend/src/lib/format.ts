@@ -171,3 +171,25 @@ export function formatearMomento(iso: string): string {
     minute: "2-digit",
   });
 }
+
+
+/**
+ * Cuánto hace, en palabras.
+ *
+ * Se prefiere "hace 3 horas" a una marca de tiempo ISO: la pregunta que se
+ * está respondiendo es si el precio sirve, no cuál es su instante exacto.
+ */
+export function haceCuanto(iso: string, ahora: Date = new Date()): string {
+  const momento = new Date(iso);
+  if (Number.isNaN(momento.getTime())) return "";
+
+  const minutos = Math.floor((ahora.getTime() - momento.getTime()) / 60000);
+  if (minutos < 1) return "recién";
+  if (minutos < 60) return `hace ${minutos} min`;
+
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `hace ${horas} h`;
+
+  const dias = Math.floor(horas / 24);
+  return dias === 1 ? "hace 1 día" : `hace ${dias} días`;
+}

@@ -23,19 +23,88 @@ import {
   Select,
   Tabla,
 } from "../components/ui";
-import { formatearCantidad, formatearImporte, signo } from "../lib/format";
+import {
+  formatearCantidad,
+  formatearImporte,
+  haceCuanto,
+  signo,
+} from "../lib/format";
 import {
   crearPortfolio,
   fetchPortfolios,
   fetchPositions,
   type Portfolio as PortfolioT,
   type Position,
+  type PriceStatus,
+  type Total,
 } from "../lib/finance";
+
+/**
+ * Cómo se describe la calidad de un precio.
+ *
+ * El texto importa tanto como el color. "Estimada" sin explicación no le dice
+ * nada a nadie; el título aclara de dónde sale el número.
+ */
+const CALIDAD: Record<PriceStatus, { texto: string; detalle: string }> = {
+  FRESCA: { texto: "", detalle: "" },
+  ESTIMADA: {
+    texto: "estimada",
+    detalle:
+      "La fuente no informa cuándo se cotizó. La antigüedad se deduce del horario de rueda.",
+  },
+  VIEJA: {
+    texto: "desactualizada",
+    detalle: "El precio superó el umbral de antigüedad para este tipo de activo.",
+  },
+  SIN_FECHA: {
+    texto: "sin fecha",
+    detalle: "No se puede saber de cuándo es este precio.",
+  },
+  AUSENTE: {
+    texto: "sin cotización",
+    detalle: "Todavía no se obtuvo ningún precio para este activo.",
+  },
+};
+
+/** Encabezado con el valor de la cartera, o la explicación de por qué falta. */
+function ValorTotal({ total }: { total: Total }) {
+  if (total.posiciones_totales === 0) return null;
+
+  if (total.total === null) {
+    return (
+      <div className="mb-8 rounded border border-ink-600 bg-ink-800 p-5">
+        <p className="text-sm text-text-muted">Valor de la cartera</p>
+        <p className="mt-1 text-2xl text-stale">No se puede calcular</p>
+        <p className="mt-2 max-w-prose text-sm text-text-muted">
+          {total.motivo}. Preferimos no mostrar un total antes que mostrar uno
+          que parezca completo sin serlo.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-8 rounded border border-ink-600 bg-ink-800 p-5">
+      <p className="text-sm text-text-muted">Valor de la cartera</p>
+      <p className="mt-1 text-2xl">
+        <Num>{formatearImporte(total.total)}</Num>{" "}
+        <span className="text-base text-text-muted">{total.currency}</span>
+      </p>
+      {total.es_estimado && (
+        <p className="mt-2 max-w-prose text-sm text-stale">
+          Estimado: {total.motivo}. La fuente de precios de CEDEARs no informa
+          la hora de cotización, así que se deduce del horario de rueda.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function Portfolio() {
   const [portfolios, setPortfolios] = useState<PortfolioT[] | null>(null);
   const [elegido, setElegido] = useState("");
   const [posiciones, setPosiciones] = useState<Position[] | null>(null);
+  const [total, setTotal] = useState<Total | null>(null);
   const [error, setError] = useState("");
   const [nombre, setNombre] = useState("Principal");
   const [moneda, setMoneda] = useState("USD");
@@ -61,11 +130,13 @@ export function Portfolio() {
       setPosiciones(null);
       const r = await fetchPositions(elegido);
       if (r.ok) {
-        setPosiciones(r.data);
+        setPosiciones(r.data.positions);
+        setTotal(r.data.total);
         setError("");
       } else {
         setError(r.error);
         setPosiciones([]);
+        setTotal(null);
       }
     })();
   }, [elegido]);
@@ -175,6 +246,8 @@ export function Portfolio() {
         </div>
       )}
 
+      {total && <ValorTotal total={total} />}
+
       {posiciones === null ? (
         <p className="text-text-muted">Cargando posiciones…</p>
       ) : posiciones.length === 0 ? (
@@ -189,9 +262,10 @@ export function Portfolio() {
               { titulo: "Activo" },
               { titulo: "Cantidad", alineacion: "derecha" },
               { titulo: "Costo promedio", alineacion: "derecha" },
-              { titulo: "Costo de lo abierto", alineacion: "derecha" },
-              { titulo: "Resultado realizado", alineacion: "derecha" },
-              { titulo: "Método" },
+              { titulo: "Precio actual", alineacion: "derecha" },
+              { titulo: "Valor actual", alineacion: "derecha" },
+              { titulo: "No realizado", alineacion: "derecha" },
+              { titulo: "Realizado", alineacion: "derecha" },
             ]}
           >
             {posiciones.map((p) => {
@@ -210,7 +284,53 @@ export function Portfolio() {
                     </Num>
                   </td>
                   <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
-                    <Num>{formatearImporte(p.open_cost_basis)}</Num>
+                    {p.current_price === null ? (
+                      <Num tono="tenue" title={CALIDAD[p.price_status].detalle}>
+                        —
+                      </Num>
+                    ) : (
+                      <span
+                        className="inline-flex flex-col items-end"
+                        title={CALIDAD[p.price_status].detalle}
+                      >
+                        <Num tono={p.price_status === "VIEJA" ? "tenue" : "neutro"}>
+                          {formatearImporte(p.current_price)}
+                        </Num>
+                        {p.price_as_of && (
+                          <span className="text-micro text-text-faint">
+                            {haceCuanto(p.price_as_of)}
+                            {CALIDAD[p.price_status].texto &&
+                              ` · ${CALIDAD[p.price_status].texto}`}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                    {/* Un guion y no un cero: "no sé cuánto vale" no es "no
+                        vale nada". */}
+                    <Num tono={p.current_value === null ? "tenue" : "neutro"}>
+                      {p.current_value === null
+                        ? "—"
+                        : formatearImporte(p.current_value)}
+                    </Num>
+                  </td>
+                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                    {p.unrealized_pnl === null ? (
+                      <Num tono="tenue">—</Num>
+                    ) : (
+                      <Num
+                        tono={
+                          signo(p.unrealized_pnl) === "positivo"
+                            ? "positivo"
+                            : signo(p.unrealized_pnl) === "negativo"
+                              ? "negativo"
+                              : "tenue"
+                        }
+                      >
+                        {formatearImporte(p.unrealized_pnl)}
+                      </Num>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
                     <Num
@@ -233,10 +353,11 @@ export function Portfolio() {
 
           <div className="mt-8 space-y-3">
             <Nota>
-              No figura el valor actual de la cartera porque el sistema todavía no
-              obtiene cotizaciones. Preferimos no mostrar un número antes que
-              mostrar uno viejo o estimado sin decirlo: ese fue el problema que
-              dio origen a este proyecto. La valuación llega en la fase 4.
+              El precio de los CEDEARs se obtiene de una fuente gratuita que no
+              informa la hora de cotización, así que la antigüedad se deduce del
+              horario de rueda y va marcada como estimada. Es un dato real con
+              una limitación declarada, no un número presentado como algo que no
+              es.
             </Nota>
             <Nota>
               Los importes están en la moneda de cada operación y no incluyen
