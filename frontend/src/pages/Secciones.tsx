@@ -30,15 +30,6 @@ function Seccion({
   );
 }
 
-export const Dashboard = () => (
-  <Seccion
-    title="Dashboard"
-    subtitle="Cuánto tenés, dónde está, cuánto ganaste o perdiste."
-    pendiente="Todavía no hay nada que resumir."
-    fase="Los indicadores necesitan operaciones cargadas (fase 2) y cotizaciones en vivo (fase 3). El dashboard se arma en la fase 6."
-  />
-);
-
 export const Rendimiento = () => (
   <Seccion
     title="Rendimiento"

@@ -14,7 +14,14 @@
 
 import { api, type ApiResult } from "./api";
 
-export type AssetType = "CEDEAR" | "CRYPTO" | "CASH";
+/**
+ * Tipos de activo.
+ *
+ * `BOND` se agregó al mirar boletos reales: el catálogo original no
+ * contemplaba bonos. AL30 cotiza en pesos y AL30D en dólares, así que un bono
+ * puede tener moneda distinta del resto de la cartera.
+ */
+export type AssetType = "CEDEAR" | "BOND" | "CRYPTO" | "CASH";
 export type AccountType = "BROKER" | "EXCHANGE" | "WALLET";
 export type TxType =
   | "BUY"
