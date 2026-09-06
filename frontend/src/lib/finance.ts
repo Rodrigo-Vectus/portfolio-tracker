@@ -186,6 +186,44 @@ export const crearOperacion = (body: NuevaOperacion) =>
 export const anularOperacion = (id: string, motivo: string) =>
   api.post<Transaction>(`/transactions/${id}/void`, { motivo }, true);
 
+export interface Movimiento {
+  tx_id: string;
+  tx_type: TxType;
+  fecha: string;
+  monto: string;
+  saldo_posterior: string;
+  currency: string;
+  descripcion: string;
+}
+
+/** Saldo de caja con su desglose. El total solo no explica de dónde sale. */
+export interface Saldo {
+  currency: string;
+  saldo: string;
+  depositos: string;
+  retiros: string;
+  invertido: string;
+  recuperado: string;
+  dividendos: string;
+  comisiones: string;
+  aporte_neto: string;
+  es_negativo: boolean;
+  movimientos: Movimiento[];
+}
+
+export const fetchSaldo = (portfolioId: string, currency = "ARS") =>
+  api.get<Saldo>(`/cash?portfolio_id=${portfolioId}&currency=${currency}`);
+
+export const crearMovimiento = (body: {
+  portfolio_id: string;
+  account_id?: string | null;
+  tx_type: TxType;
+  monto: string;
+  currency: string;
+  executed_at: string;
+  notes?: string | null;
+}) => api.post<Transaction>("/cash", body, true);
+
 export const fetchPositions = (portfolioId: string) =>
   api.get<PositionsResponse>(`/positions?portfolio_id=${portfolioId}`);
 

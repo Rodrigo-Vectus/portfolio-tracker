@@ -12,6 +12,7 @@ deja de serlo, la salida es mover el recalculo al worker **y marcar el dato
 con su `as_of`**, no dejarlo en silencio.
 """
 
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -24,15 +25,18 @@ from app.core.timezones import fecha_de_rueda
 from app.db.session import get_session
 from app.models import Portfolio, Transaction, TransactionStatus
 from app.schemas.finance import (
+    MovimientoIn,
     PositionOut,
     PositionsResponse,
     TotalOut,
     TransactionIn,
     TransactionOut,
     TransactionVoidIn,
+    SaldoOut,
 )
 from app.services import transactions as tx_service
 from app.services.valuation import resultado_no_realizado, valuar_portfolio
+from app.services.cash import saldo_de_portfolio
 from app.services.transactions import TransactionServiceError
 
 router = APIRouter(tags=["operaciones"])
@@ -271,3 +275,89 @@ async def list_positions(
             posiciones_estimadas=total.posiciones_estimadas,
         ),
     )
+
+
+# ---------------------------------------------------------------------- caja
+
+
+@router.get("/cash", response_model=SaldoOut, summary="Saldo de caja")
+async def get_saldo(
+    portfolio_id: UUID,
+    user: ActiveUser,
+    session: Session,
+    currency: str = "ARS",
+) -> SaldoOut:
+    """Cuánta plata hay sin invertir, y de dónde salió.
+
+    El saldo se deriva del libro como todo lo demás: depósitos menos retiros,
+    menos lo que costaron las compras, más lo que dejaron las ventas.
+
+    Cada moneda tiene su saldo. Sumar pesos y dólares requeriría convertir, y
+    esa conversión necesita un tipo de cambio con su fecha (D2).
+    """
+    await _portfolio_propio(session, user.id, portfolio_id)
+    saldo = await saldo_de_portfolio(
+        session, user_id=user.id, portfolio_id=portfolio_id, currency=currency
+    )
+    return SaldoOut(
+        currency=saldo.currency,
+        saldo=saldo.saldo,
+        depositos=saldo.depositos,
+        retiros=saldo.retiros,
+        invertido=saldo.invertido,
+        recuperado=saldo.recuperado,
+        dividendos=saldo.dividendos,
+        comisiones=saldo.comisiones,
+        aporte_neto=saldo.aporte_neto,
+        es_negativo=saldo.es_negativo,
+        movimientos=saldo.movimientos,
+    )
+
+
+@router.post(
+    "/cash",
+    response_model=TransactionOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_csrf)],
+    summary="Registrar un movimiento de efectivo",
+)
+async def crear_movimiento(
+    payload: MovimientoIn,
+    user: ActiveUser,
+    session: Session,
+    request: Request,
+) -> Transaction:
+    """Registra un depósito, retiro, dividendo o costo de cuenta.
+
+    Va al mismo libro que las compras y las ventas: es la misma clase de hecho
+    histórico y se anula igual. Un movimiento de efectivo se guarda con
+    cantidad 1 y el monto en el precio unitario, sin activo asociado.
+    """
+    await _portfolio_propio(session, user.id, payload.portfolio_id)
+
+    try:
+        fila = await tx_service.registrar(
+            session,
+            user_id=user.id,
+            portfolio_id=payload.portfolio_id,
+            asset_id=None,
+            account_id=payload.account_id,
+            tx_type=payload.tx_type,
+            quantity=Decimal(1),
+            unit_price=payload.monto,
+            price_currency=payload.currency,
+            settlement_currency=payload.currency,
+            executed_at=payload.executed_at,
+            trade_date=fecha_de_rueda(payload.executed_at),
+            notes=payload.notes,
+            request=request,
+        )
+    except TransactionServiceError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from None
+
+    await session.commit()
+    await session.refresh(fila)
+    return fila

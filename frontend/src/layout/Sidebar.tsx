@@ -14,6 +14,7 @@ const ITEMS: Item[] = [
   { to: "/operaciones", label: "Operaciones" },
   { to: "/activos", label: "Activos" },
   { to: "/cuentas", label: "Cuentas" },
+  { to: "/caja", label: "Caja" },
   { to: "/rendimiento", label: "Rendimiento" },
   { to: "/historial", label: "Historial" },
   { to: "/configuracion", label: "Configuración" },

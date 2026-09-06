@@ -26,6 +26,10 @@ class AssetType(StrEnum):
     CEDEAR = "CEDEAR"
     CRYPTO = "CRYPTO"
     CASH = "CASH"
+    #: Bonos soberanos y corporativos. Aparecio al mirar boletos reales: el
+    #: catalogo original no los contemplaba. AL30 cotiza en pesos y AL30D en
+    #: dolares, asi que un bono puede tener moneda distinta del resto.
+    BOND = "BOND"
 
 
 class AccountType(StrEnum):

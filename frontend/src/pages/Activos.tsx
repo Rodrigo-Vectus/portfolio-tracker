@@ -23,6 +23,7 @@ import { crearAsset, fetchAssets, type Asset, type AssetType } from "../lib/fina
 
 const TIPOS: { valor: AssetType; etiqueta: string }[] = [
   { valor: "CEDEAR", etiqueta: "CEDEAR" },
+  { valor: "BOND", etiqueta: "Bono" },
   { valor: "CRYPTO", etiqueta: "Criptomoneda" },
   { valor: "CASH", etiqueta: "Efectivo" },
 ];

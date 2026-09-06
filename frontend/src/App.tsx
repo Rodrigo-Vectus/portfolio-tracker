@@ -9,6 +9,7 @@ import { Login } from "./pages/Login";
 import { Dashboard, Historial, Rendimiento } from "./pages/Secciones";
 import { Activos } from "./pages/Activos";
 import { Cuentas } from "./pages/Cuentas";
+import { Caja } from "./pages/Caja";
 import { Operaciones } from "./pages/Operaciones";
 import { Portfolio } from "./pages/Portfolio";
 import { Estado } from "./pages/Estado";
@@ -30,6 +31,7 @@ export default function App() {
               <Route path="operaciones" element={<Operaciones />} />
               <Route path="activos" element={<Activos />} />
               <Route path="cuentas" element={<Cuentas />} />
+              <Route path="caja" element={<Caja />} />
               <Route path="rendimiento" element={<Rendimiento />} />
               <Route path="historial" element={<Historial />} />
               <Route path="configuracion" element={<Configuracion />} />

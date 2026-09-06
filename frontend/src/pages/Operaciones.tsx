@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { SelectorDeActivo } from "../components/SelectorDeActivo";
 import {
   Button,
   EmptyState,
@@ -198,7 +199,7 @@ export function Operaciones() {
             </Select>
           </div>
         )}
-        <Button onClick={() => setAbierto((v) => !v)} disabled={activos.length === 0}>
+        <Button onClick={() => setAbierto((v) => !v)}>
           {abierto ? "Cancelar" : "Registrar operación"}
         </Button>
         <label className="flex items-center gap-2 pb-2 text-sm text-text-muted">
@@ -210,15 +211,6 @@ export function Operaciones() {
           Mostrar anuladas
         </label>
       </div>
-
-      {activos.length === 0 && (
-        <div className="mb-6">
-          <Nota>
-            Para registrar una operación primero tenés que dar de alta el activo en
-            la sección Activos.
-          </Nota>
-        </div>
-      )}
 
       {abierto && (
         <div className="mb-8 max-w-3xl rounded border border-ink-600 bg-ink-800 p-5">
@@ -234,17 +226,12 @@ export function Operaciones() {
                 </option>
               ))}
             </Select>
-            <Select
-              label="Activo"
-              value={assetId}
-              onChange={(e) => setAssetId(e.target.value)}
-            >
-              {activos.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.symbol} — {a.name}
-                </option>
-              ))}
-            </Select>
+            <SelectorDeActivo
+              activos={activos}
+              valor={assetId}
+              onElegir={setAssetId}
+              onCreado={(a) => setActivos((prev) => [...prev, a])}
+            />
             <Field
               label="Cuándo"
               type="datetime-local"

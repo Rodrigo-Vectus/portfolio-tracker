@@ -240,3 +240,56 @@ class TotalOut(BaseModel):
 class PositionsResponse(BaseModel):
     positions: list[PositionOut]
     total: TotalOut
+
+
+class MovimientoOut(DecimalOut):
+    tx_id: str
+    tx_type: TransactionType
+    fecha: datetime
+    monto: Decimal
+    saldo_posterior: Decimal
+    currency: str
+    descripcion: str
+
+
+class SaldoOut(DecimalOut):
+    """Saldo de caja con su desglose.
+
+    El total solo no explica de dónde sale. `aporte_neto` responde "cuánto
+    puse de mi bolsillo", que es distinto del costo de las posiciones abiertas
+    y del capital neto aportado: son tres números que la planilla anterior
+    confundía en uno.
+    """
+
+    currency: str
+    saldo: Decimal
+    depositos: Decimal
+    retiros: Decimal
+    invertido: Decimal
+    recuperado: Decimal
+    dividendos: Decimal
+    comisiones: Decimal
+    aporte_neto: Decimal
+    es_negativo: bool
+    movimientos: list[MovimientoOut]
+
+
+class MovimientoIn(BaseModel):
+    """Depósito, retiro, dividendo o costo de cuenta.
+
+    No lleva activo ni cantidad: un depósito de pesos no es la compra de un
+    activo cuyo precio es 1. El monto va directo.
+    """
+
+    portfolio_id: UUID
+    account_id: UUID | None = None
+    tx_type: TransactionType
+    monto: Decimal = Field(gt=0)
+    currency: str = Field(min_length=2, max_length=8)
+    executed_at: datetime
+    notes: str | None = None
+
+    @field_validator("executed_at")
+    @classmethod
+    def _normalizar_zona(cls, value: datetime) -> datetime:
+        return a_utc(value)

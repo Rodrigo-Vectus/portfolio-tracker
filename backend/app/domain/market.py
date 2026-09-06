@@ -45,6 +45,7 @@ class Frescura(str, Enum):
 UMBRALES = {
     "CRYPTO": timedelta(minutes=30),
     "CEDEAR": timedelta(hours=24),
+    "BOND": timedelta(hours=24),
     "CASH": timedelta(hours=24),
     "FX": timedelta(hours=6),
 }
