@@ -41,6 +41,14 @@ export interface Asset {
   market: string | null;
   sector: string | null;
   display_precision: number;
+  /**
+   * Cuántas unidades representa el precio informado.
+   *
+   * 100 para bonos, que cotizan por lámina de 100 nominales; 1 para todo lo
+   * demás. Sin esto el costo de un bono sale cien veces mayor, y el error no
+   * se nota porque el número queda grande pero plausible.
+   */
+  price_factor: string;
   is_active: boolean;
 }
 
@@ -170,7 +178,25 @@ export const crearAsset = (body: {
   currency: string;
   market?: string | null;
   sector?: string | null;
+  price_factor?: string;
 }) => api.post<Asset>("/assets", body, true);
+
+/**
+ * Edita un activo del catálogo.
+ *
+ * El símbolo, el mercado y el tipo no se pueden cambiar: forman la clave
+ * natural y el activo puede tener operaciones asociadas.
+ */
+export const editarAsset = (
+  id: string,
+  body: {
+    name?: string;
+    sector?: string | null;
+    display_precision?: number;
+    price_factor?: string;
+    is_active?: boolean;
+  },
+) => api.patch<Asset>(`/assets/${id}`, body, true);
 
 export const crearAccount = (body: {
   name: string;

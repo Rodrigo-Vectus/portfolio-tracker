@@ -102,9 +102,12 @@ class Transaction:
     commission: Decimal = field(default_factory=lambda: Decimal(0))
     taxes: Decimal = field(default_factory=lambda: Decimal(0))
     status: TxStatus = TxStatus.ACTIVE
+    #: Cuantas unidades representa el precio. 100 para bonos, que cotizan por
+    #: lamina; 1 para todo lo demas. Ver `precio_efectivo`.
+    price_factor: Decimal = field(default_factory=lambda: Decimal(1))
 
     def __post_init__(self) -> None:
-        for name in ("quantity", "unit_price", "commission", "taxes"):
+        for name in ("quantity", "unit_price", "commission", "taxes", "price_factor"):
             object.__setattr__(
                 self, name, to_decimal(getattr(self, name), field=name)
             )
@@ -126,6 +129,10 @@ class Transaction:
                     f"{self.tx_id}: el precio unitario no puede ser negativo."
                 )
 
+        if self.price_factor <= 0:
+            raise LedgerError(
+                f"{self.tx_id}: el factor de precio debe ser positivo."
+            )
         if self.commission < 0:
             raise LedgerError(f"{self.tx_id}: la comision no puede ser negativa.")
         if self.taxes < 0:
@@ -136,15 +143,24 @@ class Transaction:
         return self.status is TxStatus.ACTIVE
 
     @property
+    def precio_efectivo(self) -> Decimal:
+        """Precio por unidad real del instrumento.
+
+        Un bono informa su precio por cada 100 nominales. Usar el precio del
+        boleto tal cual multiplicaria el costo por cien.
+        """
+        return self.unit_price / self.price_factor
+
+    @property
     def gross(self) -> Money:
-        """cantidad x precio, sin comisiones ni impuestos."""
-        return Money(self.quantity * self.unit_price, self.currency)
+        """cantidad x precio efectivo, sin comisiones ni impuestos."""
+        return Money(self.quantity * self.precio_efectivo, self.currency)
 
     @property
     def cost_with_fees(self) -> Money:
         """Costo total de una compra: bruto + comision + impuestos (D6)."""
         return Money(
-            self.quantity * self.unit_price + self.commission + self.taxes,
+            self.quantity * self.precio_efectivo + self.commission + self.taxes,
             self.currency,
         )
 
@@ -152,7 +168,7 @@ class Transaction:
     def proceeds_net(self) -> Money:
         """Producido de una venta: bruto - comision - impuestos (D6)."""
         return Money(
-            self.quantity * self.unit_price - self.commission - self.taxes,
+            self.quantity * self.precio_efectivo - self.commission - self.taxes,
             self.currency,
         )
 

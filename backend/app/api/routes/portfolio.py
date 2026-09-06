@@ -13,6 +13,8 @@ son las cuentas, los portfolios y las operaciones.
 
 from typing import Annotated
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -26,6 +28,7 @@ from app.schemas.finance import (
     AccountOut,
     AssetIn,
     AssetOut,
+    AssetPatch,
     PortfolioIn,
     PortfolioOut,
 )
@@ -62,6 +65,13 @@ async def create_asset(payload: AssetIn, _: ActiveUser, session: Session) -> Ass
         market=payload.market.strip().upper() if payload.market else None,
         sector=payload.sector,
         display_precision=payload.display_precision,
+        # Un bono cotiza por lámina de 100 nominales. Se sugiere acá y se
+        # puede corregir: la convención es del instrumento, no del tipo.
+        price_factor=(
+            payload.price_factor
+            if payload.price_factor != 1
+            else (100 if payload.asset_type.value == "BOND" else 1)
+        ),
     )
     session.add(asset)
     try:
@@ -79,6 +89,39 @@ async def create_asset(payload: AssetIn, _: ActiveUser, session: Session) -> Ass
 
 
 # --------------------------------------------------------------------- cuentas
+
+
+@router.patch(
+    "/assets/{asset_id}",
+    response_model=AssetOut,
+    dependencies=[Depends(require_csrf)],
+    summary="Editar un activo",
+)
+async def update_asset(
+    asset_id: UUID, payload: AssetPatch, _: ActiveUser, session: Session
+) -> Asset:
+    """Corrige los datos de un activo del catálogo.
+
+    Sólo cambia lo que venga informado. `symbol`, `market` y `asset_type` no
+    son editables: forman la clave natural y ya pueden tener operaciones
+    asociadas.
+
+    Desactivar no borra: un activo con historial no puede desaparecer sin
+    romper el libro. Deja de ofrecerse para operaciones nuevas y deja de
+    consultarse al proveedor de precios.
+    """
+    asset = await session.get(Asset, asset_id)
+    if asset is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No encontrado.")
+
+    for campo in ("name", "sector", "display_precision", "price_factor", "is_active"):
+        valor = getattr(payload, campo)
+        if valor is not None:
+            setattr(asset, campo, valor)
+
+    await session.commit()
+    await session.refresh(asset)
+    return asset
 
 
 @router.get("/accounts", response_model=list[AccountOut], summary="Listar cuentas")

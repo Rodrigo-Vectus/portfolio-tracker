@@ -300,3 +300,68 @@ def test_el_mensaje_conserva_los_decimales_que_importan() -> None:
         realized_fifo(ops)
     assert "vender 0.5" in str(exc.value)
     assert "hay 0.25" in str(exc.value)
+
+
+# --------------------------------------------------------------------------
+# Factor de precio: los bonos cotizan por lámina de 100
+# --------------------------------------------------------------------------
+
+
+def bono(tx_id: str, tipo: TxType, cantidad: str, precio: str, dia: int):
+    """Operación sobre un bono: el precio viene por cada 100 nominales."""
+    return Transaction(
+        tx_id=tx_id, symbol="AL30", tx_type=tipo, quantity=cantidad,
+        unit_price=precio, currency=ARS,
+        executed_at=datetime(2025, 6, dia, 12, 0), trade_date=date(2025, 6, dia),
+        price_factor="100",
+    )
+
+
+def test_el_factor_por_defecto_no_cambia_nada() -> None:
+    """Un CEDEAR tiene factor 1: el cálculo es idéntico al de siempre."""
+    t = tx("c1", TxType.BUY, "10", "100", 1)
+    assert t.price_factor == Decimal(1)
+    assert t.precio_efectivo == Decimal(100)
+    assert t.gross.amount == Decimal(1000)
+
+
+def test_un_bono_cotiza_por_lamina_de_cien() -> None:
+    """Boleto real de AL30: 100 nominales a 10.392 son 10.392, no 1.039.200.
+
+    Sin el factor el costo sale cien veces mayor, y el error no se nota
+    porque el número queda grande pero plausible.
+    """
+    t = bono("c1", TxType.BUY, "100", "10392", 1)
+    assert t.precio_efectivo == Decimal("103.92")
+    assert t.gross.amount == Decimal("10392")
+
+
+def test_el_costo_del_lote_de_un_bono_usa_el_precio_efectivo() -> None:
+    ledger = build_lots([bono("c1", TxType.BUY, "100", "10392", 1)])
+    assert ledger.lots[0].unit_cost == Decimal("103.92")
+    assert ledger.lots[0].open_cost.amount == Decimal("10392")
+
+
+def test_el_realizado_de_un_bono_se_calcula_sobre_el_precio_efectivo() -> None:
+    """Compra 100 a 10.392, vende 40 a 11.000.
+
+        efectivo compra = 103,92 ; efectivo venta = 110
+        realizado = 40 × (110 − 103,92) = 243,20
+    """
+    ops = [
+        bono("c1", TxType.BUY, "100", "10392", 1),
+        bono("v1", TxType.SELL, "40", "11000", 2),
+    ]
+    assert realized_fifo(ops).amount == Decimal("243.20")
+    assert realized_wac(ops).amount == Decimal("243.20")
+
+
+def test_un_factor_no_positivo_se_rechaza() -> None:
+    """Dividir por cero o por un negativo daría un costo sin sentido."""
+    with pytest.raises(LedgerError, match="factor de precio"):
+        Transaction(
+            tx_id="x", symbol="AL30", tx_type=TxType.BUY, quantity="1",
+            unit_price="100", currency=ARS,
+            executed_at=datetime(2025, 6, 1, 12, 0), trade_date=date(2025, 6, 1),
+            price_factor="0",
+        )

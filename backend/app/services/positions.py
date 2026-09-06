@@ -111,7 +111,10 @@ async def rebuild_asset(
         return None
 
     por_tx = {str(f.id): f for f in filas}
-    dominio: list[DomainTx] = [to_domain(f, symbol=asset.symbol) for f in filas]
+    dominio: list[DomainTx] = [
+        to_domain(f, symbol=asset.symbol, price_factor=asset.price_factor)
+        for f in filas
+    ]
 
     ledger = build_lots(dominio)
     pnl = realized(dominio, method)

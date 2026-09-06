@@ -97,7 +97,7 @@ def _monto_efectivo(tx: Transaction) -> Decimal:
     venta **resta** de lo que entra (D6). Por eso el neto no es simplemente
     cantidad × precio.
     """
-    bruto = tx.quantity * tx.unit_price
+    bruto = tx.quantity * tx.precio_efectivo
     costos = tx.commission + tx.taxes
 
     if tx.tx_type is TxType.BUY:

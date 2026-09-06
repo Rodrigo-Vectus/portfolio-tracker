@@ -12,6 +12,10 @@ Que el consumo fisico sea FIFO no es una eleccion de metodo contable: es el
 orden en que se agotan los lotes, y es el mismo para todos los metodos. El
 resultado realizado de cada metodo se calcula aca, sobre la misma secuencia.
 
+Se usa `precio_efectivo` y nunca `unit_price` directo: un bono informa su
+precio por cada 100 nominales, y usar el del boleto tal cual multiplicaria el
+costo por cien sin que el numero deje de parecer plausible.
+
 Convencion de comisiones (D6): en una compra suman al costo base del lote; en
 una venta restan del producido, una sola vez por venta y no por cada lote
 consumido.
@@ -98,7 +102,7 @@ def build_lots(transactions: list[Transaction]) -> LotLedger:
 
     for tx in ordenadas:
         if tx.tx_type is TxType.BUY:
-            costo_total = tx.quantity * tx.unit_price + tx.commission + tx.taxes
+            costo_total = tx.quantity * tx.precio_efectivo + tx.commission + tx.taxes
             ledger.lots.append(
                 CostLot(
                     lot_id=f"lot:{tx.tx_id}",
@@ -142,7 +146,7 @@ def realized_fifo(transactions: list[Transaction]) -> Money:
 
     for tx in ordenadas:
         if tx.tx_type is TxType.BUY:
-            costo_total = tx.quantity * tx.unit_price + tx.commission + tx.taxes
+            costo_total = tx.quantity * tx.precio_efectivo + tx.commission + tx.taxes
             ledger.lots.append(
                 CostLot(
                     lot_id=f"lot:{tx.tx_id}",
@@ -168,7 +172,7 @@ def realized_fifo(transactions: list[Transaction]) -> Money:
                 if lot.is_closed:
                     continue
                 tomado = min(lot.quantity_open, pendiente)
-                realizado += tomado * (tx.unit_price - lot.unit_cost)
+                realizado += tomado * (tx.precio_efectivo - lot.unit_cost)
                 lot.quantity_open -= tomado
                 pendiente -= tomado
             # La comision de venta se resta una sola vez, no por lote.
@@ -196,13 +200,13 @@ def realized_wac(transactions: list[Transaction]) -> Money:
     for tx in ordenadas:
         if tx.tx_type is TxType.BUY:
             cantidad += tx.quantity
-            costo += tx.quantity * tx.unit_price + tx.commission + tx.taxes
+            costo += tx.quantity * tx.precio_efectivo + tx.commission + tx.taxes
 
         elif tx.tx_type is TxType.SELL:
             if tx.quantity > cantidad:
                 raise InsufficientHoldings(tx.symbol, tx.quantity, cantidad)
             ppc = costo / cantidad
-            realizado += tx.quantity * (tx.unit_price - ppc) - tx.commission - tx.taxes
+            realizado += tx.quantity * (tx.precio_efectivo - ppc) - tx.commission - tx.taxes
             costo -= tx.quantity * ppc
             cantidad -= tx.quantity
 

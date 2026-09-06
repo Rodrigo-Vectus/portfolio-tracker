@@ -104,6 +104,8 @@ export function SelectorDeActivo({
       asset_type: tipo,
       currency: moneda,
       market: mercado || null,
+      // Un bono cotiza por lámina de 100 nominales.
+      price_factor: tipo === "BOND" ? "100" : "1",
     });
     setGuardando(false);
     if (!r.ok) {

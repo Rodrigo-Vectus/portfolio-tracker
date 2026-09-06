@@ -157,11 +157,16 @@ async def registrar(
         # nueva. Una venta valida hoy puede dejar de serlo si antes se anulo
         # una compra, asi que no alcanza con mirar la tenencia actual.
         historial = await _historial(session, portfolio_id, asset_id)
-        candidato = [to_domain(f, symbol=asset.symbol) for f in historial]
+        candidato = [
+            to_domain(f, symbol=asset.symbol, price_factor=asset.price_factor)
+            for f in historial
+        ]
         fila.id = fila.id or None
         session.add(fila)
         await session.flush()  # asigna el id sin cerrar la transaccion
-        candidato.append(to_domain(fila, symbol=asset.symbol))
+        candidato.append(
+            to_domain(fila, symbol=asset.symbol, price_factor=asset.price_factor)
+        )
 
         try:
             build_lots(candidato)
@@ -227,7 +232,12 @@ async def anular(
         asset = await session.get(Asset, fila.asset_id)
         historial = await _historial(session, fila.portfolio_id, fila.asset_id)
         try:
-            build_lots([to_domain(f, symbol=asset.symbol) for f in historial])
+            build_lots(
+                [
+                    to_domain(f, symbol=asset.symbol, price_factor=asset.price_factor)
+                    for f in historial
+                ]
+            )
         except InsufficientHoldings as exc:
             raise TransactionServiceError(
                 f"No se puede anular: el historial posterior quedaria invalido. {exc}"

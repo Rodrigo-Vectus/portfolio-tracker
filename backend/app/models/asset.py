@@ -70,6 +70,17 @@ class Asset(Base, TimestampMixin):
     # Decimales con los que se muestra. No se usa para calcular.
     display_precision: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
 
+    # Cuantas unidades representa el precio informado. 1 para casi todo; 100
+    # para bonos, que cotizan por lamina de 100 nominales.
+    #
+    #     costo = cantidad x precio / price_factor
+    #
+    # Sin esto, el costo de un bono sale cien veces mayor y el error no se
+    # nota: el numero queda grande pero plausible.
+    price_factor: Mapped[Decimal] = mapped_column(
+        PRICE, nullable=False, default=Decimal(1)
+    )
+
     sector: Mapped[str | None] = mapped_column(String(80))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     extra: Mapped[dict | None] = mapped_column(JSONB)

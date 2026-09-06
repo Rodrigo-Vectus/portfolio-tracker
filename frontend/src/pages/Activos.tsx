@@ -19,7 +19,13 @@ import {
   Select,
   Tabla,
 } from "../components/ui";
-import { crearAsset, fetchAssets, type Asset, type AssetType } from "../lib/finance";
+import {
+  crearAsset,
+  editarAsset,
+  fetchAssets,
+  type Asset,
+  type AssetType,
+} from "../lib/finance";
 
 const TIPOS: { valor: AssetType; etiqueta: string }[] = [
   { valor: "CEDEAR", etiqueta: "CEDEAR" },
@@ -40,6 +46,8 @@ export function Activos() {
   const [moneda, setMoneda] = useState("ARS");
   const [mercado, setMercado] = useState("BYMA");
   const [sector, setSector] = useState("");
+  const [factor, setFactor] = useState("1");
+  const [editando, setEditando] = useState<Asset | null>(null);
 
   async function cargar() {
     const r = await fetchAssets();
@@ -65,6 +73,7 @@ export function Activos() {
       currency: moneda,
       market: mercado || null,
       sector: sector || null,
+      price_factor: factor,
     });
     setGuardando(false);
 
@@ -111,7 +120,13 @@ export function Activos() {
             <Select
               label="Tipo"
               value={tipo}
-              onChange={(e) => setTipo(e.target.value as AssetType)}
+              onChange={(e) => {
+                const t = e.target.value as AssetType;
+                setTipo(t);
+                // Un bono cotiza por lámina de 100 nominales. Se sugiere y
+                // queda editable: la convención es del instrumento.
+                setFactor(t === "BOND" ? "100" : "1");
+              }}
             >
               {TIPOS.map((t) => (
                 <option key={t.valor} value={t.valor}>
@@ -137,6 +152,13 @@ export function Activos() {
               onChange={(e) => setSector(e.target.value)}
               placeholder="Tecnología"
             />
+            <Field
+              label="Precio por"
+              inputMode="decimal"
+              value={factor}
+              onChange={(e) => setFactor(e.target.value)}
+              hint="Cuántas unidades representa el precio. 100 en bonos, 1 en el resto."
+            />
           </div>
           <div className="mt-5">
             <Button onClick={() => void guardar()} disabled={guardando || !symbol || !name}>
@@ -144,6 +166,17 @@ export function Activos() {
             </Button>
           </div>
         </div>
+      )}
+
+      {editando && (
+        <EditarActivo
+          activo={editando}
+          onCerrar={() => setEditando(null)}
+          onGuardado={() => {
+            setEditando(null);
+            void cargar();
+          }}
+        />
       )}
 
       {error && (
@@ -169,6 +202,8 @@ export function Activos() {
               { titulo: "Mercado" },
               { titulo: "Moneda" },
               { titulo: "Sector" },
+              { titulo: "Precio por", alineacion: "derecha" },
+              { titulo: "", alineacion: "derecha" },
             ]}
           >
             {activos.map((a) => (
@@ -192,5 +227,106 @@ export function Activos() {
         </>
       )}
     </>
+  );
+}
+
+
+/**
+ * Edición de un activo del catálogo.
+ *
+ * Sólo se puede cambiar lo que no forma la identidad del instrumento. El
+ * símbolo, el mercado y el tipo quedan fijos: son la clave natural y el
+ * activo puede tener operaciones asociadas.
+ *
+ * Desactivar no borra. Un activo con historial no puede desaparecer sin
+ * romper el libro: deja de ofrecerse para operaciones nuevas y deja de
+ * consultarse al proveedor de precios.
+ */
+function EditarActivo({
+  activo,
+  onCerrar,
+  onGuardado,
+}: {
+  activo: Asset;
+  onCerrar: () => void;
+  onGuardado: () => void;
+}) {
+  const [name, setName] = useState(activo.name);
+  const [sector, setSector] = useState(activo.sector ?? "");
+  const [factor, setFactor] = useState(String(Number(activo.price_factor)));
+  const [activa, setActiva] = useState(activo.is_active);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+
+  async function guardar() {
+    setGuardando(true);
+    setError("");
+    const r = await editarAsset(activo.id, {
+      name,
+      sector: sector || null,
+      price_factor: factor,
+      is_active: activa,
+    });
+    setGuardando(false);
+    if (!r.ok) {
+      setError(r.error);
+      return;
+    }
+    onGuardado();
+  }
+
+  return (
+    <div className="mb-8 max-w-2xl rounded border border-brand/40 bg-ink-800 p-5">
+      <p className="mb-4 text-sm text-text-muted">
+        Editando <span className="font-medium text-text">{activo.symbol}</span> ·{" "}
+        {activo.asset_type} · {activo.currency}
+        {activo.market ? ` · ${activo.market}` : ""}
+      </p>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
+        <Field
+          label="Sector"
+          value={sector}
+          onChange={(e) => setSector(e.target.value)}
+        />
+        <Field
+          label="Precio por"
+          inputMode="decimal"
+          value={factor}
+          onChange={(e) => setFactor(e.target.value)}
+          hint="Cuántas unidades representa el precio informado."
+        />
+        <label className="flex items-center gap-2 self-end pb-2 text-sm">
+          <input
+            type="checkbox"
+            checked={activa}
+            onChange={(e) => setActiva(e.target.checked)}
+          />
+          Activo disponible para operar
+        </label>
+      </div>
+
+      {error && (
+        <div className="mt-4">
+          <ErrorNote>{error}</ErrorNote>
+        </div>
+      )}
+
+      <div className="mt-5 flex gap-2">
+        <Button onClick={() => void guardar()} disabled={guardando || !name}>
+          {guardando ? "Guardando…" : "Guardar cambios"}
+        </Button>
+        <Button variant="ghost" onClick={onCerrar}>
+          Cancelar
+        </Button>
+      </div>
+
+      <p className="mt-4 max-w-prose text-micro text-text-faint">
+        El símbolo, el mercado y el tipo no se editan: forman la identidad del
+        activo y puede haber operaciones que lo referencien. Si te equivocaste
+        con eso, desactivalo y creá el que corresponde.
+      </p>
+    </div>
   );
 }

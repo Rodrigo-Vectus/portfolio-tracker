@@ -20,7 +20,9 @@ from app.models.enums_finance import TransactionStatus, TransactionType
 from app.models.transaction import Transaction as OrmTx
 
 
-def to_domain(row: OrmTx, *, symbol: str) -> DomainTx:
+def to_domain(
+    row: OrmTx, *, symbol: str, price_factor: Decimal | None = None
+) -> DomainTx:
     """Convierte una fila del libro en una operacion del dominio.
 
     El simbolo se pasa aparte y no se lee de `row.asset`: cargar la relacion
@@ -46,6 +48,9 @@ def to_domain(row: OrmTx, *, symbol: str) -> DomainTx:
         trade_date=row.trade_date,
         commission=row.commission or Decimal(0),
         taxes=row.taxes or Decimal(0),
+        # Propiedad del instrumento, no de la operacion: viene del activo.
+        # Si no se pasa, se asume 1, que es lo correcto para todo menos bonos.
+        price_factor=price_factor or Decimal(1),
         status=(
             TxStatus.ACTIVE
             if row.status is TransactionStatus.ACTIVE

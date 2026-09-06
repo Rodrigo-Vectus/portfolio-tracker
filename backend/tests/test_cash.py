@@ -11,7 +11,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from app.domain.cash import calcular_saldo, monedas_con_movimientos
-from app.domain.ledger import Transaction, TxStatus, TxType
+from app.domain.ledger import Transaction, TxStatus, TxType  # noqa: F401
 
 
 def tx(
@@ -157,3 +157,20 @@ def test_el_saldo_posterior_permite_auditar_movimiento_por_movimiento() -> None:
     ]
     saldos = [m.saldo_posterior for m in calcular_saldo(ops).movimientos]
     assert saldos == [Decimal(100000), Decimal(60000), Decimal(85000)]
+
+
+def test_la_caja_de_un_bono_usa_el_precio_por_lamina() -> None:
+    """Comprar 100 nominales de AL30 a 10.392 saca 10.392 de la caja.
+
+    Sin el factor saldrían 1.039.200 y el saldo quedaría destruido sin que el
+    número dejara de parecer razonable.
+    """
+    compra = Transaction(
+        tx_id="c1", symbol="AL30", tx_type=TxType.BUY, quantity="100",
+        unit_price="10392", currency="ARS",
+        executed_at=datetime(2025, 6, 2, 12, 0), trade_date=date(2025, 6, 2),
+        price_factor="100",
+    )
+    s = calcular_saldo([deposito("d1", "50000", 1), compra])
+    assert s.saldo == Decimal("39608")
+    assert s.invertido == Decimal("10392")

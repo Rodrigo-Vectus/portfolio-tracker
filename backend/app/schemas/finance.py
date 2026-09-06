@@ -59,6 +59,9 @@ class AssetIn(BaseModel):
     market: str | None = Field(default=None, max_length=16)
     sector: str | None = Field(default=None, max_length=80)
     display_precision: int = Field(default=2, ge=0, le=18)
+    #: Cuántas unidades representa el precio informado. 100 para bonos, que
+    #: cotizan por lámina de 100 nominales. 1 para todo lo demás.
+    price_factor: Decimal = Field(default=Decimal(1), gt=0)
 
 
 class AssetOut(DecimalOut):
@@ -70,10 +73,27 @@ class AssetOut(DecimalOut):
     market: str | None
     sector: str | None
     display_precision: int
+    price_factor: Decimal
     is_active: bool
 
 
 # -------------------------------------------------------- cuentas y portfolios
+
+
+class AssetPatch(BaseModel):
+    """Edición de un activo.
+
+    **El símbolo, el mercado y el tipo no se pueden cambiar**: son la clave
+    natural del activo, y cambiarlos convertiría en otra cosa un instrumento
+    que ya tiene operaciones asociadas. Si te equivocaste con eso, lo correcto
+    es desactivarlo y crear el que corresponde.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    sector: str | None = Field(default=None, max_length=80)
+    display_precision: int | None = Field(default=None, ge=0, le=18)
+    price_factor: Decimal | None = Field(default=None, gt=0)
+    is_active: bool | None = None
 
 
 class AccountIn(BaseModel):

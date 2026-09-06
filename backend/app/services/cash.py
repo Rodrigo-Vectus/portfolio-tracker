@@ -26,7 +26,7 @@ async def saldo_de_portfolio(
     currency: str = "ARS",
 ) -> SaldoDeCaja:
     resultado = await session.execute(
-        select(Transaction, Asset.symbol)
+        select(Transaction, Asset.symbol, Asset.price_factor)
         .outerjoin(Asset, Asset.id == Transaction.asset_id)
         .where(
             Transaction.portfolio_id == portfolio_id,
@@ -39,6 +39,7 @@ async def saldo_de_portfolio(
     # Los movimientos de efectivo no tienen activo: el simbolo queda en CASH
     # para que el dominio pueda describirlos sin inventar un instrumento.
     dominio = [
-        to_domain(fila, symbol=symbol or "CASH") for fila, symbol in resultado.all()
+        to_domain(fila, symbol=symbol or "CASH", price_factor=factor)
+        for fila, symbol, factor in resultado.all()
     ]
     return calcular_saldo(dominio, currency)

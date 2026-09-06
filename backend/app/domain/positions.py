@@ -105,7 +105,7 @@ def _wac_open_cost(transactions: list[Transaction]) -> Decimal:
     for tx in transactions:
         if tx.tx_type is TxType.BUY:
             cantidad += tx.quantity
-            costo += tx.quantity * tx.unit_price + tx.commission + tx.taxes
+            costo += tx.quantity * tx.precio_efectivo + tx.commission + tx.taxes
         elif tx.tx_type is TxType.SELL:
             ppc = costo / cantidad
             costo -= tx.quantity * ppc
