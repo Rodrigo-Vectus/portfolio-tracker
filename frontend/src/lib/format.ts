@@ -193,3 +193,33 @@ export function haceCuanto(iso: string, ahora: Date = new Date()): string {
   const dias = Math.floor(horas / 24);
   return dias === 1 ? "hace 1 día" : `hace ${dias} días`;
 }
+
+
+/**
+ * Formatea una fracción como porcentaje.
+ *
+ * La API entrega `"0.2534"`; en pantalla va `25,34%`. La multiplicación por
+ * 100 se hace corriendo el punto decimal sobre el texto, para no pasar por
+ * `number` tampoco acá: un porcentaje degradado se ve bien y arrastra el
+ * error hasta que alguien lo multiplica por un patrimonio.
+ *
+ * El redondeo y el agrupado quedan en `formatearImporte`, que ya está
+ * probado. Duplicar esa lógica sería una segunda implementación del mismo
+ * cálculo, con sus propios errores.
+ */
+export function formatearPorcentaje(valor: string, decimales = 2): string {
+  const m = valor.trim().match(/^(-?)(\d+)(?:\.(\d+))?$/);
+  if (m === null) return valor;
+
+  const [, negativo, entero, fraccion = ""] = m;
+
+  // Correr el punto dos lugares equivale a multiplicar por 100. Se rellena
+  // con ceros si la fracción es más corta que eso.
+  const digitos = entero + fraccion.padEnd(2, "0");
+  const corte = digitos.length - Math.max(fraccion.length - 2, 0);
+  const parteEntera = digitos.slice(0, corte).replace(/^0+(?=\d)/, "") || "0";
+  const parteDecimal = digitos.slice(corte);
+
+  const movido = parteDecimal ? `${parteEntera}.${parteDecimal}` : parteEntera;
+  return `${formatearImporte(negativo + movido, decimales)}%`;
+}

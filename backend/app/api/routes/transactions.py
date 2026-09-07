@@ -33,10 +33,13 @@ from app.schemas.finance import (
     TransactionOut,
     TransactionVoidIn,
     SaldoOut,
+    RendimientoOut,
+    RoiOut,
 )
 from app.services import transactions as tx_service
 from app.services.valuation import resultado_no_realizado, valuar_portfolio
 from app.services.cash import saldo_de_portfolio
+from app.services.performance import rendimiento_de_portfolio
 from app.services.transactions import TransactionServiceError
 
 router = APIRouter(tags=["operaciones"])
@@ -361,3 +364,43 @@ async def crear_movimiento(
     await session.commit()
     await session.refresh(fila)
     return fila
+
+
+# --------------------------------------------------------------- rendimiento
+
+
+@router.get(
+    "/performance", response_model=RendimientoOut, summary="Rendimiento de la cartera"
+)
+async def get_rendimiento(
+    portfolio_id: UUID,
+    user: ActiveUser,
+    session: Session,
+    currency: str = "ARS",
+) -> RendimientoOut:
+    """ROI por posición y XIRR de la cartera.
+
+    **El TWR no está**, y no es un olvido: necesita el valor de la cartera en
+    cada fecha de flujo, y hoy sólo existe el último precio. Calcularlo con lo
+    que hay daría un número que parece un rendimiento sin serlo. Llega cuando
+    existan los snapshots diarios.
+
+    El ROI de cada posición se calcula sobre el costo de lo que sigue abierto,
+    no sobre el capital neto aportado: ese denominador se achica al vender e
+    infla el porcentaje solo.
+    """
+    await _portfolio_propio(session, user.id, portfolio_id)
+    r = await rendimiento_de_portfolio(
+        session, user_id=user.id, portfolio_id=portfolio_id, currency=currency
+    )
+    return RendimientoOut(
+        currency=r.currency,
+        posiciones=[RoiOut.model_validate(p, from_attributes=True) for p in r.posiciones],
+        realizado=r.realizado,
+        no_realizado=r.no_realizado,
+        resultado_total=r.resultado_total,
+        valor_actual=r.valor_actual,
+        aporte_neto=r.aporte_neto,
+        xirr_anual=r.xirr_anual,
+        xirr_motivo=r.xirr_motivo,
+    )

@@ -257,6 +257,38 @@ export const crearMovimiento = (body: {
   notes?: string | null;
 }) => api.post<Transaction>("/cash", body, true);
 
+export interface Roi {
+  symbol: string;
+  open_cost_basis: string;
+  valor_actual: string | null;
+  no_realizado: string | null;
+  /** Fracción, no porcentaje: "0.25" es 25%. */
+  roi: string | null;
+}
+
+/**
+ * Rendimiento de la cartera.
+ *
+ * `xirr_anual` viene en `null` con `xirr_motivo` explicando por qué, en vez de
+ * un cero que se leería como "no rindió nada".
+ */
+export interface Rendimiento {
+  currency: string;
+  posiciones: Roi[];
+  realizado: string;
+  no_realizado: string | null;
+  resultado_total: string | null;
+  valor_actual: string | null;
+  aporte_neto: string;
+  xirr_anual: string | null;
+  xirr_motivo: string | null;
+}
+
+export const fetchRendimiento = (portfolioId: string, currency = "ARS") =>
+  api.get<Rendimiento>(
+    `/performance?portfolio_id=${portfolioId}&currency=${currency}`,
+  );
+
 export const fetchPositions = (portfolioId: string) =>
   api.get<PositionsResponse>(`/positions?portfolio_id=${portfolioId}`);
 

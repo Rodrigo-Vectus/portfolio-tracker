@@ -313,3 +313,35 @@ class MovimientoIn(BaseModel):
     @classmethod
     def _normalizar_zona(cls, value: datetime) -> datetime:
         return a_utc(value)
+
+
+class RoiOut(DecimalOut):
+    symbol: str
+    open_cost_basis: Decimal
+    valor_actual: Decimal | None
+    no_realizado: Decimal | None
+    #: Fracción, no porcentaje: 0.25 es 25%. El formato es del frontend.
+    roi: Decimal | None
+
+
+class RendimientoOut(DecimalOut):
+    """Rendimiento de la cartera.
+
+    Cada número trae su propio denominador y ninguno se llama "capital
+    invertido": ese rótulo tenía tres significados incompatibles, y usar uno
+    solo para todo es lo que hacía que el porcentaje de la planilla se inflara
+    al vender.
+
+    `xirr_anual` viene en `None` con `xirr_motivo` explicando por qué, en vez
+    de un cero que se leería como "no rindió nada".
+    """
+
+    currency: str
+    posiciones: list[RoiOut]
+    realizado: Decimal
+    no_realizado: Decimal | None
+    resultado_total: Decimal | None
+    valor_actual: Decimal | None
+    aporte_neto: Decimal
+    xirr_anual: Decimal | None
+    xirr_motivo: str | None

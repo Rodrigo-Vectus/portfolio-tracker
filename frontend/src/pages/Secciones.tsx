@@ -30,15 +30,6 @@ function Seccion({
   );
 }
 
-export const Rendimiento = () => (
-  <Seccion
-    title="Rendimiento"
-    subtitle="Resultado realizado y no realizado, en pesos y en dólares."
-    pendiente="Todavía no hay rendimiento que calcular."
-    fase="El motor de cálculo (ROI, TWR, XIRR) se construye en la fase 4."
-  />
-);
-
 export const Historial = () => (
   <Seccion
     title="Historial"
