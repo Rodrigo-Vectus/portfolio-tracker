@@ -36,6 +36,8 @@ from app.schemas.finance import (
     SaldoOut,
     RendimientoOut,
     RoiOut,
+    HistorialOut,
+    PuntoOut,
 )
 from app.services import transactions as tx_service
 from app.services.valuation import resultado_no_realizado, valuar_portfolio
@@ -43,6 +45,7 @@ from app.services.cash import saldo_de_portfolio
 from app.services.fx import cargar_serie
 from app.services.valuation import valuar_en_moneda_dura
 from app.services.performance import rendimiento_de_portfolio
+from app.services.snapshots import serie as serie_de_snapshots
 from app.services.transactions import TransactionServiceError
 
 router = APIRouter(tags=["operaciones"])
@@ -455,4 +458,50 @@ async def get_rendimiento(
         aporte_neto=r.aporte_neto,
         xirr_anual=r.xirr_anual,
         xirr_motivo=r.xirr_motivo,
+    )
+
+
+# ----------------------------------------------------------------- historial
+
+
+@router.get(
+    "/history", response_model=HistorialOut, summary="Evolucion de la cartera"
+)
+async def get_historial(
+    portfolio_id: UUID, user: ActiveUser, session: Session
+) -> HistorialOut:
+    """Serie diaria del valor de la cartera.
+
+    **La serie arranca el dia que se tomo el primer snapshot y crece hacia
+    adelante.** No se puede reconstruir hacia atras: eso exigiria el precio de
+    cada activo en cada dia pasado, y el sistema solo guarda la ultima
+    cotizacion de cada uno. Rellenar los dias anteriores con el precio de hoy
+    daria una linea plana que parece historia sin serlo.
+
+    Los dias sin valuacion vienen con `total_value` en `null` y su motivo. El
+    grafico corta ahi en vez de interpolar.
+    """
+    await _portfolio_propio(session, user.id, portfolio_id)
+    puntos = await serie_de_snapshots(
+        session, user_id=user.id, portfolio_id=portfolio_id
+    )
+
+    nota = None
+    if not puntos:
+        nota = (
+            "Todavia no hay historial. La serie arranca con el primer cierre "
+            "diario y crece a partir de ahi: no se puede reconstruir hacia "
+            "atras porque no existe el precio historico de cada activo."
+        )
+    elif len(puntos) < 2:
+        nota = (
+            "Hay un solo punto. El grafico necesita al menos dos dias para "
+            "dibujar una linea."
+        )
+
+    return HistorialOut(
+        puntos=[PuntoOut.model_validate(p, from_attributes=True) for p in puntos],
+        currency=puntos[0].currency if puntos else "ARS",
+        desde=puntos[0].snapshot_date if puntos else None,
+        nota=nota,
     )

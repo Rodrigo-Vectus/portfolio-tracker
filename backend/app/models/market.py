@@ -41,6 +41,7 @@ from app.models.mixins import TimestampMixin
 PRICE = Numeric(28, 10)
 RATE = Numeric(28, 10)
 QUANTITY = Numeric(38, 18)
+AMOUNT = Numeric(38, 18)
 
 
 class PriceQuote(Base, TimestampMixin):
@@ -160,3 +161,81 @@ class ProviderLog(Base):
 
     def __repr__(self) -> str:
         return f"<ProviderLog {self.provider} {self.operation} {self.status}>"
+
+
+class PriceBarDaily(Base, TimestampMixin):
+    """Cierre diario de un activo. Serie permanente.
+
+    Separada de `price_quote` porque son cosas distintas: una es el precio de
+    ahora con retención corta, la otra es el histórico. Mezclarlas en una sola
+    tabla con sólo un timestamp hace lenta la consulta de un año y vuelve
+    imposible la deduplicación.
+    """
+
+    __tablename__ = "price_bar_daily"
+    __table_args__ = (
+        UniqueConstraint(
+            "asset_id", "trade_date", "source", name="uq_price_bar_daily_asset_id"
+        ),
+        Index("ix_price_bar_daily_asset_fecha", "asset_id", "trade_date"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    asset_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("asset.id", ondelete="CASCADE"), nullable=False
+    )
+    trade_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+
+    close: Mapped[Decimal] = mapped_column(PRICE, nullable=False)
+    open: Mapped[Decimal | None] = mapped_column(PRICE)
+    high: Mapped[Decimal | None] = mapped_column(PRICE)
+    low: Mapped[Decimal | None] = mapped_column(PRICE)
+    volume: Mapped[Decimal | None] = mapped_column(QUANTITY)
+
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+    source: Mapped[str] = mapped_column(String(40), nullable=False)
+    #: El cierre puede venir de un precio cuya hora se dedujo del horario de
+    #: rueda. Se marca para no confundirlo con un dato informado.
+    is_estimated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class PortfolioSnapshot(Base, TimestampMixin):
+    """Valor de la cartera en un día. Caché reconstruible, nunca autoridad.
+
+    `total_value` es nullable a propósito: si un día faltó la cotización de
+    alguna posición, el snapshot se guarda con el valor en NULL y el motivo
+    escrito. Un hueco declarado dice "ese día no se pudo valuar"; un cero
+    diría que la cartera valía cero.
+    """
+
+    __tablename__ = "portfolio_snapshot"
+    __table_args__ = (
+        UniqueConstraint(
+            "portfolio_id", "snapshot_date", name="uq_portfolio_snapshot_portfolio_id"
+        ),
+        Index("ix_portfolio_snapshot_portfolio_fecha", "portfolio_id", "snapshot_date"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("user_account.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    portfolio_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("portfolio.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+
+    total_value: Mapped[Decimal | None] = mapped_column(AMOUNT)
+    open_cost_basis: Mapped[Decimal] = mapped_column(AMOUNT, nullable=False)
+    unrealized_pnl: Mapped[Decimal | None] = mapped_column(AMOUNT)
+    realized_pnl: Mapped[Decimal] = mapped_column(AMOUNT, nullable=False, default=0)
+    cash_balance: Mapped[Decimal] = mapped_column(AMOUNT, nullable=False, default=0)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
+
+    is_estimated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    posiciones: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    posiciones_sin_precio: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    motivo: Mapped[str | None] = mapped_column(Text)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

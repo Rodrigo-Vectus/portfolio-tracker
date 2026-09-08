@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from app.core.logging import get_logger
 from app.db.redis import redis_client
 from app.db.session import SessionLocal
-from app.services import market_data
+from app.services import market_data, snapshots
 
 log = get_logger("worker.tasks")
 
@@ -83,3 +83,28 @@ async def refrescar_cripto(ctx: dict) -> int:
             return 0
     log.info("worker.refrescar_cripto", guardadas=guardadas)
     return guardadas
+
+
+async def cerrar_el_dia(ctx: dict) -> int:
+    """Guarda el cierre de cada activo y la foto de cada cartera.
+
+    Corre despues del cierre de rueda de BYMA. En ese momento el ultimo precio
+    conocido de cada activo **es** su cierre, asi que copiarlo a la serie
+    diaria no requiere pedir nada nuevo al proveedor.
+
+    Si vuelve a correr el mismo dia, pisa: el ultimo calculo del dia es el que
+    vale. Si a media manana faltaba una cotizacion y a la tarde llego, el
+    snapshot bueno es el de la tarde.
+    """
+    async with SessionLocal() as session:
+        try:
+            activos = await snapshots.guardar_cierres_del_dia(session)
+            carteras = await snapshots.tomar_snapshots_de_todos(session)
+            await session.commit()
+        except Exception as exc:  # noqa: BLE001
+            await session.rollback()
+            log.error("worker.cerrar_el_dia.error", error=str(exc))
+            return 0
+
+    log.info("worker.cerrar_el_dia", activos=activos, carteras=carteras)
+    return carteras

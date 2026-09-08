@@ -357,3 +357,34 @@ class RendimientoOut(DecimalOut):
     aporte_neto: Decimal
     xirr_anual: Decimal | None
     xirr_motivo: str | None
+
+
+class PuntoOut(DecimalOut):
+    """Un punto de la evolución de la cartera.
+
+    `total_value` puede venir en `None`: ese día faltó alguna cotización. El
+    gráfico corta ahí en vez de interpolar, porque una línea que cruza un
+    hueco afirma que ese día la cartera valía el promedio de sus vecinos.
+    """
+
+    snapshot_date: date
+    total_value: Decimal | None
+    open_cost_basis: Decimal
+    unrealized_pnl: Decimal | None
+    realized_pnl: Decimal
+    cash_balance: Decimal
+    currency: str
+    is_estimated: bool
+    motivo: str | None
+
+
+class HistorialOut(BaseModel):
+    """Serie de evolución con la advertencia de su alcance."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    puntos: list[PuntoOut]
+    currency: str
+    #: Desde cuándo hay serie. Antes de esa fecha no hay datos y no se inventan.
+    desde: date | None
+    nota: str | None
