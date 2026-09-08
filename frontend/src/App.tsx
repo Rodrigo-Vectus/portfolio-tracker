@@ -6,7 +6,7 @@ import { Admin } from "./pages/Admin";
 import { ChangePassword } from "./pages/ChangePassword";
 import { Configuracion } from "./pages/Configuracion";
 import { Login } from "./pages/Login";
-import { Historial } from "./pages/Secciones";
+import { Historial } from "./pages/Historial";
 import { Rendimiento } from "./pages/Rendimiento";
 import { Dashboard } from "./pages/Dashboard";
 import { Activos } from "./pages/Activos";

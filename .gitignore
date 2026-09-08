@@ -40,3 +40,8 @@ data/
 # historial financiero real: nunca al repositorio
 *.xlsx
 *.xls
+
+# Respaldos manuales: no van al repositorio
+*.bk
+*.bk[0-9]
+*.orig

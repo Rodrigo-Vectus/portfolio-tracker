@@ -94,7 +94,7 @@ const SECCIONES: Seccion[] = [
       {
         to: "/historial",
         label: "Historial",
-        detalle: "Evolución · pronto",
+        detalle: "Evolución de la cartera",
         icono: IconHistorial,
       },
     ],

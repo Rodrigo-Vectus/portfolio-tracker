@@ -299,6 +299,34 @@ export interface Rendimiento {
   xirr_motivo: string | null;
 }
 
+/**
+ * Un punto de la evolución de la cartera.
+ *
+ * `total_value` puede venir en `null`: ese día faltó alguna cotización. El
+ * gráfico corta ahí en vez de interpolar.
+ */
+export interface Punto {
+  snapshot_date: string;
+  total_value: string | null;
+  open_cost_basis: string;
+  unrealized_pnl: string | null;
+  realized_pnl: string;
+  cash_balance: string;
+  currency: string;
+  is_estimated: boolean;
+  motivo: string | null;
+}
+
+export interface Historial {
+  puntos: Punto[];
+  currency: string;
+  desde: string | null;
+  nota: string | null;
+}
+
+export const fetchHistorial = (portfolioId: string) =>
+  api.get<Historial>(`/history?portfolio_id=${portfolioId}`);
+
 export const fetchRendimiento = (portfolioId: string, currency = "ARS") =>
   api.get<Rendimiento>(
     `/performance?portfolio_id=${portfolioId}&currency=${currency}`,
