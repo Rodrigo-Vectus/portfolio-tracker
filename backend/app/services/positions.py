@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.domain.cost_basis import CostMethod, build_lots, realized
 from app.domain.ledger import Transaction as DomainTx
+from app.domain.positions import wac_open_cost
 from app.models import (
     Asset,
     CostLot,
@@ -160,7 +161,7 @@ async def rebuild_asset(
         # Con WAC el costo remanente es el promedio movil, no la suma de los
         # lotes: los dos metodos dejan abierto lo mismo en cantidad, pero no
         # en costo.
-        costo_abierto = _costo_abierto_wac(dominio)
+        costo_abierto = wac_open_cost(dominio)
 
     posicion = PositionCache(
         user_id=user_id,
@@ -181,20 +182,6 @@ async def rebuild_asset(
     session.add(posicion)
     await session.flush()
     return posicion
-
-
-def _costo_abierto_wac(transacciones: list[DomainTx]) -> Decimal:
-    cantidad = ZERO
-    costo = ZERO
-    for tx in transacciones:
-        if tx.tx_type.value == "BUY":
-            cantidad += tx.quantity
-            costo += tx.quantity * tx.unit_price + tx.commission + tx.taxes
-        elif tx.tx_type.value == "SELL":
-            ppc = costo / cantidad
-            costo -= tx.quantity * ppc
-            cantidad -= tx.quantity
-    return costo
 
 
 async def rebuild_portfolio(

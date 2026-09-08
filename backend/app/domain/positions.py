@@ -85,7 +85,7 @@ def build_position(
             (lot.quantity_open * lot.unit_cost for lot in ledger.lots), ZERO
         )
     else:
-        costo_abierto = _wac_open_cost(ordenadas)
+        costo_abierto = wac_open_cost(ordenadas)
 
     return Position(
         symbol=symbol,
@@ -98,8 +98,18 @@ def build_position(
     )
 
 
-def _wac_open_cost(transactions: list[Transaction]) -> Decimal:
-    """Costo base remanente segun promedio ponderado movil."""
+def wac_open_cost(transactions: list[Transaction]) -> Decimal:
+    """Costo base remanente segun promedio ponderado movil.
+
+    Es publica a proposito: la capa de servicios la necesita para materializar
+    `position_cache`, y tenerla duplicada alla ya causo un bug. El factor de
+    precio de los bonos se aplico en el dominio y la copia del servicio quedo
+    con el precio crudo, asi que el costo de un bono salia cien veces mayor
+    solo por ese camino.
+
+    Un calculo financiero escrito dos veces es dos calculos que pueden
+    divergir, y el dia que divergen los numeros siguen pareciendo razonables.
+    """
     cantidad = ZERO
     costo = ZERO
     for tx in transactions:

@@ -117,6 +117,17 @@ async def registrar(
             f"Una operacion de tipo {tx_type.value} necesita un activo."
         )
 
+    # El activo se busca antes de armar la fila porque su `price_factor`
+    # entra en los importes. Un bono cotiza por lamina de 100 nominales, asi
+    # que usar el precio del boleto tal cual guardaria un bruto cien veces
+    # mayor. Los movimientos de efectivo no tienen activo: su factor es 1.
+    asset = await session.get(Asset, asset_id) if asset_id is not None else None
+    if tx_type in POSITION_TYPES and asset is None:
+        raise TransactionServiceError("El activo no existe.")
+
+    factor = asset.price_factor if asset is not None else Decimal(1)
+    precio_efectivo = unit_price / factor
+
     fila = Transaction(
         user_id=user_id,
         portfolio_id=portfolio_id,
@@ -131,11 +142,11 @@ async def registrar(
         taxes=taxes,
         commission_currency=price_currency.upper() if commission else None,
         taxes_currency=price_currency.upper() if taxes else None,
-        gross_amount=quantity * unit_price,
+        gross_amount=quantity * precio_efectivo,
         net_amount=(
-            quantity * unit_price + commission + taxes
+            quantity * precio_efectivo + commission + taxes
             if tx_type is TransactionType.BUY
-            else quantity * unit_price - commission - taxes
+            else quantity * precio_efectivo - commission - taxes
         ),
         fx_rate_used=fx_rate_used,
         fx_source=fx_source,
@@ -149,10 +160,7 @@ async def registrar(
     )
 
     if tx_type in POSITION_TYPES:
-        asset = await session.get(Asset, asset_id)
-        if asset is None:
-            raise TransactionServiceError("El activo no existe.")
-
+        assert asset is not None  # garantizado arriba
         # La validacion corre sobre el historial completo mas la operacion
         # nueva. Una venta valida hoy puede dejar de serlo si antes se anulo
         # una compra, asi que no alcanza con mirar la tenencia actual.

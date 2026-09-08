@@ -12,6 +12,7 @@ confirmaria que el recurso existe y solo no es tuyo, y con eso se pueden
 enumerar carteras ajenas probando identificadores.
 """
 
+import secrets
 from datetime import datetime
 from decimal import Decimal
 
@@ -71,6 +72,7 @@ def _alta_portfolio(s: Sesion, nombre: str = "Principal"):
 
 
 def _operacion(s: Sesion, portfolio, asset, tipo, cantidad, precio, dia, **extra):
+    """`extra` permite pasar commission, executed_at u otros campos."""
     cuerpo = {
         "portfolio_id": portfolio["id"],
         "asset_id": asset["id"],
@@ -410,3 +412,205 @@ def test_operar_sin_csrf_es_rechazado(client: TestClient, usuario) -> None:
         },
     )
     assert r.status_code == 403
+
+
+# ------------------------------------------------------------------- caja
+
+
+def _movimiento(s: Sesion, portfolio, tipo, monto, dia, moneda="ARS"):
+    return s.post(
+        "/api/cash",
+        json={
+            "portfolio_id": portfolio["id"],
+            "tx_type": tipo,
+            "monto": str(monto),
+            "currency": moneda,
+            "executed_at": datetime(2025, 6, dia, 12, 0).isoformat(),
+        },
+    )
+
+
+def _saldo(s: Sesion, portfolio, moneda="ARS") -> dict:
+    return s.get(
+        f"/api/cash?portfolio_id={portfolio['id']}&currency={moneda}"
+    ).json()
+
+
+def test_un_deposito_queda_disponible(sesion: Sesion) -> None:
+    portfolio = _alta_portfolio(sesion)
+    assert _movimiento(sesion, portfolio, "DEPOSIT", 100000, 1).status_code == 201
+
+    s = _saldo(sesion, portfolio)
+    assert Decimal(s["saldo"]) == Decimal(100000)
+    assert Decimal(s["aporte_neto"]) == Decimal(100000)
+    assert not s["es_negativo"]
+
+
+def test_la_compra_descuenta_de_la_caja_con_su_comision(sesion: Sesion) -> None:
+    """No sale sólo el bruto: la comisión también se paga.
+
+        100.000 − (4 × 20.000 + 500) = 19.500
+    """
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion)
+    _movimiento(sesion, portfolio, "DEPOSIT", 100000, 1)
+    _operacion(sesion, portfolio, activo, "BUY", 4, 20000, 2, commission="500")
+
+    assert Decimal(_saldo(sesion, portfolio)["saldo"]) == Decimal(19500)
+
+
+def test_el_saldo_negativo_se_informa_y_no_se_bloquea(sesion: Sesion) -> None:
+    """Comprar sin registrar el depósito deja saldo negativo.
+
+    El libro registra lo que pasó: impedirlo obligaría a inventar un depósito
+    para poder anotar una compra que sí ocurrió.
+    """
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion)
+    assert _operacion(sesion, portfolio, activo, "BUY", 4, 20000, 1).status_code == 201
+
+    s = _saldo(sesion, portfolio)
+    assert s["es_negativo"]
+    assert Decimal(s["saldo"]) == Decimal(-80000)
+
+
+def test_cada_moneda_lleva_su_propio_saldo(sesion: Sesion) -> None:
+    """Sumar pesos y dólares requeriría convertir, y eso necesita FX fechado."""
+    portfolio = _alta_portfolio(sesion)
+    _movimiento(sesion, portfolio, "DEPOSIT", 100000, 1)
+    _movimiento(sesion, portfolio, "DEPOSIT", 500, 2, moneda="USD")
+
+    assert Decimal(_saldo(sesion, portfolio, "ARS")["saldo"]) == Decimal(100000)
+    assert Decimal(_saldo(sesion, portfolio, "USD")["saldo"]) == Decimal(500)
+
+
+def test_la_caja_de_otro_usuario_no_se_ve(client: TestClient, usuario, admin) -> None:
+    a = Sesion(client, *usuario)
+    portfolio_de_a = _alta_portfolio(a, "Cartera de A")
+    _movimiento(a, portfolio_de_a, "DEPOSIT", 100000, 1)
+
+    client.cookies.clear()
+    b = Sesion(client, *admin)
+    r = b.get(f"/api/cash?portfolio_id={portfolio_de_a['id']}")
+    assert r.status_code == 404
+
+
+def test_operar_en_la_caja_de_otro_es_rechazado(
+    client: TestClient, usuario, admin
+) -> None:
+    a = Sesion(client, *usuario)
+    portfolio_de_a = _alta_portfolio(a, "Cartera de A")
+
+    client.cookies.clear()
+    b = Sesion(client, *admin)
+    assert _movimiento(b, portfolio_de_a, "DEPOSIT", 1, 1).status_code == 404
+
+
+# ------------------------------------------------------------- rendimiento
+
+
+def _rendimiento(s: Sesion, portfolio) -> dict:
+    return s.get(f"/api/performance?portfolio_id={portfolio['id']}").json()
+
+
+def test_sin_cotizacion_no_hay_roi_pero_si_realizado(sesion: Sesion) -> None:
+    """El realizado sale del libro; el ROI necesita precio de mercado."""
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion)
+    _operacion(sesion, portfolio, activo, "BUY", 10, 100, 1)
+    _operacion(sesion, portfolio, activo, "SELL", 4, 150, 2)
+
+    r = _rendimiento(sesion, portfolio)
+    assert Decimal(r["realizado"]) == Decimal(200)
+    assert r["posiciones"][0]["roi"] is None
+    assert r["no_realizado"] is None
+    assert r["resultado_total"] is None
+
+
+def test_sin_depositos_el_xirr_explica_que_falta(sesion: Sesion) -> None:
+    """Un `null` sin motivo obligaría a adivinar si es un error o un dato."""
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion)
+    _operacion(sesion, portfolio, activo, "BUY", 10, 100, 1)
+
+    r = _rendimiento(sesion, portfolio)
+    assert r["xirr_anual"] is None
+    assert "depósitos" in r["xirr_motivo"]
+
+
+def test_el_rendimiento_de_otro_usuario_no_se_ve(
+    client: TestClient, usuario, admin
+) -> None:
+    a = Sesion(client, *usuario)
+    portfolio_de_a = _alta_portfolio(a, "Cartera de A")
+
+    client.cookies.clear()
+    b = Sesion(client, *admin)
+    r = b.get(f"/api/performance?portfolio_id={portfolio_de_a['id']}")
+    assert r.status_code == 404
+
+
+# ------------------------------------------------------- edicion de activos
+
+
+def test_un_bono_nace_con_factor_cien(sesion: Sesion) -> None:
+    """Los bonos cotizan por lámina de 100 nominales."""
+    r = sesion.post(
+        "/api/assets",
+        json={
+            "symbol": f"AL30{secrets.token_hex(2).upper()}",
+            "name": "Bono 2030",
+            "asset_type": "BOND",
+            "currency": "ARS",
+            "market": "BYMA",
+        },
+    )
+    assert r.status_code == 201, r.text
+    assert Decimal(r.json()["price_factor"]) == Decimal(100)
+
+
+def test_el_factor_cambia_el_costo_de_la_operacion(sesion: Sesion) -> None:
+    """100 nominales a 10.392 cuestan 10.392, no 1.039.200."""
+    bono = sesion.post(
+        "/api/assets",
+        json={
+            "symbol": f"AL{secrets.token_hex(2).upper()}",
+            "name": "Bono 2030",
+            "asset_type": "BOND",
+            "currency": "ARS",
+            "market": "BYMA",
+        },
+    ).json()
+    portfolio = _alta_portfolio(sesion)
+    assert _operacion(
+        sesion, portfolio, bono, "BUY", 100, 10392, 1
+    ).status_code == 201
+
+    p = _posiciones(sesion, portfolio)[0]
+    assert Decimal(p["open_cost_basis"]) == Decimal(10392)
+
+
+def test_se_puede_editar_y_desactivar_un_activo(sesion: Sesion) -> None:
+    activo = _alta_activo(sesion, f"XX{secrets.token_hex(2).upper()}")
+
+    r = sesion.client.patch(
+        f"/api/assets/{activo['id']}",
+        headers=sesion.headers,
+        json={"name": "Nombre corregido", "is_active": False},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["name"] == "Nombre corregido"
+    assert r.json()["is_active"] is False
+
+    # Desactivar lo saca del listado, pero el activo sigue existiendo: puede
+    # tener operaciones que lo referencien.
+    assert all(a["id"] != activo["id"] for a in sesion.get("/api/assets").json())
+
+
+def test_editar_un_activo_inexistente_devuelve_404(sesion: Sesion) -> None:
+    r = sesion.client.patch(
+        "/api/assets/11111111-1111-1111-1111-111111111111",
+        headers=sesion.headers,
+        json={"name": "x"},
+    )
+    assert r.status_code == 404
