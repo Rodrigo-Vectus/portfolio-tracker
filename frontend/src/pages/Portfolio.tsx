@@ -105,6 +105,9 @@ export function Portfolio() {
   const [elegido, setElegido] = useState("");
   const [posiciones, setPosiciones] = useState<Position[] | null>(null);
   const [total, setTotal] = useState<Total | null>(null);
+  //: Moneda de visualización. Vacío = la de cada operación; "USD" = convertido
+  //: con el tipo de cambio de la fecha de cada compra.
+  const [verEn, setVerEn] = useState("");
   const [error, setError] = useState("");
   const [nombre, setNombre] = useState("Principal");
   const [moneda, setMoneda] = useState("USD");
@@ -128,7 +131,7 @@ export function Portfolio() {
     if (!elegido) return;
     void (async () => {
       setPosiciones(null);
-      const r = await fetchPositions(elegido);
+      const r = await fetchPositions(elegido, verEn || undefined);
       if (r.ok) {
         setPosiciones(r.data.positions);
         setTotal(r.data.total);
@@ -139,7 +142,7 @@ export function Portfolio() {
         setTotal(null);
       }
     })();
-  }, [elegido]);
+  }, [elegido, verEn]);
 
   async function crear() {
     setCreando(true);
@@ -233,6 +236,21 @@ export function Portfolio() {
             ))}
           </Select>
         </div>
+        <div className="w-44">
+          <Select
+            label="Ver en"
+            value={verEn}
+            onChange={(e) => setVerEn(e.target.value)}
+            hint={
+              verEn
+                ? "Costo al dólar de cada compra"
+                : "Moneda de cada operación"
+            }
+          >
+            <option value="">Moneda original</option>
+            <option value="USD">Dólares</option>
+          </Select>
+        </div>
         <Button variant="ghost" onClick={() => setAbierto((v) => !v)}>
           {abierto ? "Cancelar" : "Nuevo portfolio"}
         </Button>
@@ -309,26 +327,39 @@ export function Portfolio() {
                   <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
                     {/* Un guion y no un cero: "no sé cuánto vale" no es "no
                         vale nada". */}
-                    <Num tono={p.current_value === null ? "tenue" : "neutro"}>
-                      {p.current_value === null
-                        ? "—"
-                        : formatearImporte(p.current_value)}
+                    <Num
+                      tono={
+                        (verEn ? p.hard_current_value : p.current_value) === null
+                          ? "tenue"
+                          : "neutro"
+                      }
+                      title={verEn ? (p.hard_motivo ?? "") : ""}
+                    >
+                      {(() => {
+                        const v = verEn ? p.hard_current_value : p.current_value;
+                        return v === null ? "—" : formatearImporte(v);
+                      })()}
                     </Num>
                   </td>
                   <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
-                    {p.unrealized_pnl === null ? (
+                    {(verEn ? p.hard_unrealized_pnl : p.unrealized_pnl) === null ? (
                       <Num tono="tenue">—</Num>
                     ) : (
                       <Num
                         tono={
-                          signo(p.unrealized_pnl) === "positivo"
+                          signo(verEn ? p.hard_unrealized_pnl : p.unrealized_pnl) ===
+                          "positivo"
                             ? "positivo"
-                            : signo(p.unrealized_pnl) === "negativo"
+                            : signo(
+                                  verEn ? p.hard_unrealized_pnl : p.unrealized_pnl,
+                                ) === "negativo"
                               ? "negativo"
                               : "tenue"
                         }
                       >
-                        {formatearImporte(p.unrealized_pnl)}
+                        {formatearImporte(
+                          (verEn ? p.hard_unrealized_pnl : p.unrealized_pnl) ?? "0",
+                        )}
                       </Num>
                     )}
                   </td>
@@ -352,6 +383,16 @@ export function Portfolio() {
           </Tabla>
 
           <div className="mt-8 space-y-3">
+            {verEn && (
+              <Nota>
+                El costo en {verEn} se calcula convirtiendo cada compra al tipo
+                de cambio de <strong>su propia fecha</strong>, y el valor actual
+                al de hoy. Por eso el resultado en dólares no es el mismo
+                porcentaje que en pesos: convertir las dos puntas con el mismo
+                dólar era el error que hacía que las columnas en dólares de la
+                planilla no dijeran nada nuevo.
+              </Nota>
+            )}
             <Nota>
               El precio de los CEDEARs se obtiene de una fuente gratuita que no
               informa la hora de cotización, así que la antigüedad se deduce del

@@ -126,6 +126,21 @@ export interface Position {
   price_as_of: string | null;
   price_is_estimated: boolean;
   price_status: PriceStatus;
+
+  /**
+   * Costo y valor en moneda dura, cuando se piden.
+   *
+   * El costo se convierte lote por lote al tipo de cambio de la fecha de cada
+   * compra; el valor actual, al de hoy. Esa asimetría es lo que hace que el
+   * número en dólares diga algo distinto del de pesos: convertir las dos
+   * puntas con el mismo dólar daba el mismo porcentaje, que es lo que le
+   * pasaba a la planilla.
+   */
+  hard_currency: string | null;
+  hard_cost_basis: string | null;
+  hard_current_value: string | null;
+  hard_unrealized_pnl: string | null;
+  hard_motivo: string | null;
 }
 
 /**
@@ -289,7 +304,10 @@ export const fetchRendimiento = (portfolioId: string, currency = "ARS") =>
     `/performance?portfolio_id=${portfolioId}&currency=${currency}`,
   );
 
-export const fetchPositions = (portfolioId: string) =>
-  api.get<PositionsResponse>(`/positions?portfolio_id=${portfolioId}`);
+export const fetchPositions = (portfolioId: string, hardCurrency?: string) =>
+  api.get<PositionsResponse>(
+    `/positions?portfolio_id=${portfolioId}` +
+      (hardCurrency ? `&hard_currency=${hardCurrency}` : ""),
+  );
 
 export type { ApiResult };

@@ -12,6 +12,7 @@ deja de serlo, la salida es mover el recalculo al worker **y marcar el dato
 con su `as_of`**, no dejarlo en silencio.
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
@@ -39,6 +40,8 @@ from app.schemas.finance import (
 from app.services import transactions as tx_service
 from app.services.valuation import resultado_no_realizado, valuar_portfolio
 from app.services.cash import saldo_de_portfolio
+from app.services.fx import cargar_serie
+from app.services.valuation import valuar_en_moneda_dura
 from app.services.performance import rendimiento_de_portfolio
 from app.services.transactions import TransactionServiceError
 
@@ -47,6 +50,29 @@ router = APIRouter(tags=["operaciones"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 NO_ENCONTRADO = HTTPException(status.HTTP_404_NOT_FOUND, detail="No encontrado.")
+
+
+async def _en_moneda_dura(
+    session, portfolio_id, pos, asset, monto, serie, hoy, currency: str
+) -> dict:
+    """Campos de moneda dura para una posición, o el motivo de su ausencia."""
+    r = await valuar_en_moneda_dura(
+        session,
+        portfolio_id=portfolio_id,
+        asset_id=pos.asset_id,
+        symbol=asset.symbol,
+        valor_actual_local=monto.amount if monto else None,
+        serie=serie,
+        hoy=hoy,
+        currency=currency.upper(),
+    )
+    return {
+        "hard_currency": r.currency,
+        "hard_cost_basis": r.costo,
+        "hard_current_value": r.valor_actual,
+        "hard_unrealized_pnl": r.no_realizado,
+        "hard_motivo": r.motivo,
+    }
 
 
 async def _portfolio_propio(
@@ -207,7 +233,10 @@ async def void_transaction(
     summary="Posiciones de un portfolio, valuadas",
 )
 async def list_positions(
-    portfolio_id: UUID, user: ActiveUser, session: Session
+    portfolio_id: UUID,
+    user: ActiveUser,
+    session: Session,
+    hard_currency: str | None = None,
 ) -> PositionsResponse:
     """Posiciones derivadas del libro, valuadas contra la última cotización.
 
@@ -222,6 +251,13 @@ async def list_positions(
     El total se entrega en `null` si a alguna posición le falta el precio o lo
     tiene viejo, con el motivo explicado: un total incompleto se lee como
     completo, y el color de una fila no viaja hasta la suma.
+
+    Con `hard_currency=USD` cada posición trae además su costo y su valor en
+    moneda dura. **El costo se convierte lote por lote al tipo de cambio de la
+    fecha de cada compra**, no al de hoy: un costo histórico no puede cambiar
+    porque se movió el dólar esta mañana. El valor actual sí usa el de hoy, y
+    esa asimetría es lo que hace que el número en dólares diga algo distinto
+    del de pesos.
     """
     await _portfolio_propio(session, user.id, portfolio_id)
 
@@ -229,6 +265,14 @@ async def list_positions(
         session, user_id=user.id, portfolio_id=portfolio_id
     )
 
+    # La conversión es opcional y se pide explícitamente: si el usuario no
+    # eligió moneda dura, no se hacen consultas de FX ni se devuelven campos
+    # que nadie va a mirar.
+    serie = None
+    if hard_currency:
+        serie = await cargar_serie(session)
+
+    hoy = datetime.now(UTC).date()
     posiciones = []
     for pos, asset, valor in valuadas:
         cotizacion = valor.cotizacion
@@ -259,6 +303,14 @@ async def list_positions(
                 ),
                 price_is_estimated=es_estimada,
                 price_status=valor.frescura.value,
+                **(
+                    await _en_moneda_dura(
+                        session, portfolio_id, pos, asset, monto, serie, hoy,
+                        hard_currency,
+                    )
+                    if serie is not None and hard_currency
+                    else {}
+                ),
             )
         )
 

@@ -235,6 +235,18 @@ class PositionOut(DecimalOut):
     #: FRESCA | ESTIMADA | VIEJA | SIN_FECHA | AUSENTE
     price_status: str = "AUSENTE"
 
+    # --- moneda dura (D2) ---
+    #
+    # El costo se convierte lote por lote al tipo de cambio de la fecha en que
+    # se compró cada uno; el valor actual, al de hoy. Esa asimetría es lo que
+    # hace que el resultado en dólares diga algo distinto del de pesos.
+    hard_currency: str | None = None
+    hard_cost_basis: Decimal | None = None
+    hard_current_value: Decimal | None = None
+    hard_unrealized_pnl: Decimal | None = None
+    #: Por qué falta la conversión, cuando falta.
+    hard_motivo: str | None = None
+
 
 class TotalOut(BaseModel):
     """Total de la cartera, con su propia declaración de completitud.
