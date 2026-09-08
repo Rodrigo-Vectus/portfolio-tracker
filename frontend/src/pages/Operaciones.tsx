@@ -213,7 +213,7 @@ export function Operaciones() {
       </div>
 
       {abierto && (
-        <div className="mb-8 max-w-3xl rounded border border-ink-600 bg-ink-800 p-5">
+        <div className="mb-8 max-w-3xl rounded-xl border border-ink-600 bg-ink-800 p-5">
           <div className="grid gap-4 sm:grid-cols-3">
             <Select
               label="Tipo"
@@ -326,10 +326,10 @@ export function Operaciones() {
             return (
               <tr
                 key={op.id}
-                className={`border-b border-ink-700 ${anulada ? "text-text-faint" : ""}`}
+                className={`border-b border-ink-600/60 ${anulada ? "text-text-faint" : ""}`}
               >
-                <td className="px-3 py-2.5 first:pl-0 last:pr-0">{formatearFecha(op.trade_date)}</td>
-                <td className="px-3 py-2.5 first:pl-0 last:pr-0">
+                <td className="px-4 py-3">{formatearFecha(op.trade_date)}</td>
+                <td className="px-4 py-3">
                   {op.tx_type === "BUY" ? "Compra" : "Venta"}
                   {anulada && (
                     <span
@@ -340,17 +340,17 @@ export function Operaciones() {
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2.5 first:pl-0 last:pr-0 font-medium">{simbolo}</td>
-                <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                <td className="px-4 py-3 font-medium">{simbolo}</td>
+                <td className="px-4 py-3 text-right">
                   <Num>{formatearCantidad(op.quantity)}</Num>
                 </td>
-                <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                <td className="px-4 py-3 text-right">
                   <Num>{formatearImporte(op.unit_price)}</Num>
                 </td>
-                <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                <td className="px-4 py-3 text-right">
                   <Num tono="tenue">{formatearImporte(op.commission)}</Num>
                 </td>
-                <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                <td className="px-4 py-3 text-right">
                   {!anulada && (
                     <Button variant="ghost" onClick={() => void anular(op.id)}>
                       Anular

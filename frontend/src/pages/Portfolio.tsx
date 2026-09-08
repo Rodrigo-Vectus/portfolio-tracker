@@ -72,7 +72,7 @@ function ValorTotal({ total }: { total: Total }) {
 
   if (total.total === null) {
     return (
-      <div className="mb-8 rounded border border-ink-600 bg-ink-800 p-5">
+      <div className="mb-8 rounded-xl border border-ink-600 bg-ink-800 p-5">
         <p className="text-sm text-text-muted">Valor de la cartera</p>
         <p className="mt-1 text-2xl text-stale">No se puede calcular</p>
         <p className="mt-2 max-w-prose text-sm text-text-muted">
@@ -84,7 +84,7 @@ function ValorTotal({ total }: { total: Total }) {
   }
 
   return (
-    <div className="mb-8 rounded border border-ink-600 bg-ink-800 p-5">
+    <div className="mb-8 rounded-xl border border-ink-600 bg-ink-800 p-5">
       <p className="text-sm text-text-muted">Valor de la cartera</p>
       <p className="mt-1 text-2xl">
         <Num>{formatearImporte(total.total)}</Num>{" "}
@@ -174,7 +174,7 @@ export function Portfolio() {
   // aparecía cuando no había ninguno, así que al crear el primero desaparecía
   // para siempre y la pantalla quedaba sin ninguna acción posible.
   const formulario = (
-    <div className="mb-8 max-w-md rounded border border-ink-600 bg-ink-800 p-5">
+    <div className="mb-8 max-w-md rounded-xl border border-ink-600 bg-ink-800 p-5">
       <div className="grid gap-4">
             <Field
               label="Nombre"
@@ -241,11 +241,6 @@ export function Portfolio() {
             label="Ver en"
             value={verEn}
             onChange={(e) => setVerEn(e.target.value)}
-            hint={
-              verEn
-                ? "Costo al dólar de cada compra"
-                : "Moneda de cada operación"
-            }
           >
             <option value="">Moneda original</option>
             <option value="USD">Dólares</option>
@@ -289,19 +284,19 @@ export function Portfolio() {
             {posiciones.map((p) => {
               const s = signo(p.realized_pnl);
               return (
-                <tr key={p.asset_id} className="border-b border-ink-700">
-                  <td className="px-3 py-2.5 first:pl-0 last:pr-0 font-medium">{p.symbol}</td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                <tr key={p.asset_id} className="border-b border-ink-600/60">
+                  <td className="px-4 py-3 font-medium">{p.symbol}</td>
+                  <td className="px-4 py-3 text-right">
                     <Num>{formatearCantidad(p.quantity)}</Num>
                   </td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                  <td className="px-4 py-3 text-right">
                     <Num tono={p.average_cost === null ? "tenue" : "neutro"}>
                       {p.average_cost === null
                         ? "—"
                         : formatearImporte(p.average_cost)}
                     </Num>
                   </td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                  <td className="px-4 py-3 text-right">
                     {p.current_price === null ? (
                       <Num tono="tenue" title={CALIDAD[p.price_status].detalle}>
                         —
@@ -315,7 +310,7 @@ export function Portfolio() {
                           {formatearImporte(p.current_price)}
                         </Num>
                         {p.price_as_of && (
-                          <span className="text-micro text-text-faint">
+                          <span className="code text-micro text-text-faint">
                             {haceCuanto(p.price_as_of)}
                             {CALIDAD[p.price_status].texto &&
                               ` · ${CALIDAD[p.price_status].texto}`}
@@ -324,7 +319,7 @@ export function Portfolio() {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                  <td className="px-4 py-3 text-right">
                     {/* Un guion y no un cero: "no sé cuánto vale" no es "no
                         vale nada". */}
                     <Num
@@ -341,7 +336,7 @@ export function Portfolio() {
                       })()}
                     </Num>
                   </td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                  <td className="px-4 py-3 text-right">
                     {(verEn ? p.hard_unrealized_pnl : p.unrealized_pnl) === null ? (
                       <Num tono="tenue">—</Num>
                     ) : (
@@ -363,7 +358,7 @@ export function Portfolio() {
                       </Num>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                  <td className="px-4 py-3 text-right">
                     <Num
                       tono={
                         s === "positivo"
@@ -376,7 +371,7 @@ export function Portfolio() {
                       {formatearImporte(p.realized_pnl)}
                     </Num>
                   </td>
-                  <td className="px-3 py-2.5 first:pl-0 last:pr-0 text-text-muted">{p.cost_method}</td>
+                  <td className="px-4 py-3 text-text-muted">{p.cost_method}</td>
                 </tr>
               );
             })}

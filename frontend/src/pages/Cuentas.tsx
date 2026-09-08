@@ -94,7 +94,7 @@ export function Cuentas() {
       </div>
 
       {abierto && (
-        <div className="mb-8 max-w-2xl rounded border border-ink-600 bg-ink-800 p-5">
+        <div className="mb-8 max-w-2xl rounded-xl border border-ink-600 bg-ink-800 p-5">
           <div className="grid gap-4 sm:grid-cols-3">
             <Field
               label="Nombre"
@@ -153,18 +153,18 @@ export function Cuentas() {
             ]}
           >
             {cuentas.map((c) => (
-              <tr key={c.id} className="border-b border-ink-700">
-                <td className="px-3 py-2.5 font-medium first:pl-0 last:pr-0">
+              <tr key={c.id} className="border-b border-ink-600/60">
+                <td className="px-4 py-3 font-medium">
                   {c.name}
                 </td>
-                <td className="px-3 py-2.5 text-text-muted first:pl-0 last:pr-0">
+                <td className="px-4 py-3 text-text-muted">
                   {TIPOS.find((t) => t.valor === c.account_type)?.etiqueta ??
                     c.account_type}
                 </td>
-                <td className="px-3 py-2.5 text-text-muted first:pl-0 last:pr-0">
+                <td className="px-4 py-3 text-text-muted">
                   {c.default_currency}
                 </td>
-                <td className="px-3 py-2.5 text-text-muted first:pl-0 last:pr-0">
+                <td className="px-4 py-3 text-text-muted">
                   {c.is_active ? "Activa" : "Inactiva"}
                 </td>
               </tr>

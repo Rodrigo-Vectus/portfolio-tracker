@@ -1,69 +1,230 @@
+/**
+ * Barra lateral.
+ *
+ * Sigue la estructura de la referencia: marca arriba, secciones agrupadas con
+ * etiqueta, y cada ítem con ícono, título y una línea que explica qué hay
+ * adentro.
+ *
+ * El subtítulo no es decoración. En una aplicación financiera "Caja" y
+ * "Portfolio" no se distinguen solos, y la línea de abajo evita entrar a
+ * adivinar.
+ */
+
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { Button } from "../components/ui";
+import {
+  IconActivos,
+  IconAdmin,
+  IconCaja,
+  IconConfiguracion,
+  IconCuentas,
+  IconDashboard,
+  IconEstado,
+  IconHistorial,
+  IconOperaciones,
+  IconPortfolio,
+  IconRendimiento,
+  IconSalir,
+} from "../components/icons";
 
 interface Item {
   to: string;
   label: string;
+  detalle: string;
+  icono: (p: { className?: string }) => JSX.Element;
   adminOnly?: boolean;
 }
 
-const ITEMS: Item[] = [
-  { to: "/", label: "Dashboard" },
-  { to: "/portfolio", label: "Portfolio" },
-  { to: "/operaciones", label: "Operaciones" },
-  { to: "/activos", label: "Activos" },
-  { to: "/cuentas", label: "Cuentas" },
-  { to: "/caja", label: "Caja" },
-  { to: "/rendimiento", label: "Rendimiento" },
-  { to: "/historial", label: "Historial" },
-  { to: "/configuracion", label: "Configuración" },
-  { to: "/estado", label: "Estado del sistema" },
-  { to: "/admin", label: "Administración", adminOnly: true },
+interface Seccion {
+  titulo: string;
+  items: Item[];
+}
+
+const SECCIONES: Seccion[] = [
+  {
+    titulo: "Cartera",
+    items: [
+      {
+        to: "/",
+        label: "Dashboard",
+        detalle: "Resumen de tu cartera",
+        icono: IconDashboard,
+      },
+      {
+        to: "/portfolio",
+        label: "Portfolio",
+        detalle: "Posiciones y valuación",
+        icono: IconPortfolio,
+      },
+      {
+        to: "/operaciones",
+        label: "Operaciones",
+        detalle: "Compras y ventas",
+        icono: IconOperaciones,
+      },
+      {
+        to: "/caja",
+        label: "Caja",
+        detalle: "Depósitos y disponible",
+        icono: IconCaja,
+      },
+      {
+        to: "/rendimiento",
+        label: "Rendimiento",
+        detalle: "ROI y tasa anual",
+        icono: IconRendimiento,
+      },
+    ],
+  },
+  {
+    titulo: "Catálogo",
+    items: [
+      {
+        to: "/activos",
+        label: "Activos",
+        detalle: "CEDEARs, bonos y cripto",
+        icono: IconActivos,
+      },
+      {
+        to: "/cuentas",
+        label: "Cuentas",
+        detalle: "Brokers y exchanges",
+        icono: IconCuentas,
+      },
+      {
+        to: "/historial",
+        label: "Historial",
+        detalle: "Evolución · pronto",
+        icono: IconHistorial,
+      },
+    ],
+  },
+  {
+    titulo: "Sistema",
+    items: [
+      {
+        to: "/configuracion",
+        label: "Configuración",
+        detalle: "Tu cuenta y los valores por defecto",
+        icono: IconConfiguracion,
+      },
+      {
+        to: "/estado",
+        label: "Estado",
+        detalle: "Servicios y diagnóstico",
+        icono: IconEstado,
+      },
+      {
+        to: "/admin",
+        label: "Administración",
+        detalle: "Usuarios de la plataforma",
+        icono: IconAdmin,
+        adminOnly: true,
+      },
+    ],
+  },
 ];
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useAuth();
-  const visible = ITEMS.filter((i) => !i.adminOnly || user?.role === "ADMIN");
 
   return (
-    <div className="flex h-full flex-col border-r border-ink-600 bg-ink-800">
-      <div className="border-b border-ink-600 px-5 py-5">
-        <span className="font-semibold tracking-tight">Portfolio Tracker</span>
+    <div className="flex h-full flex-col border-r border-ink-600 bg-ink-900">
+      {/* Marca */}
+      <div className="flex items-center gap-3 border-b border-ink-600 px-4 py-4">
+        <img
+          src="/logo.png"
+          alt=""
+          className="h-10 w-10 shrink-0 rounded-lg object-cover"
+        />
+        <div className="min-w-0 leading-none">
+          <p className="display text-sm leading-tight">Portfolio</p>
+          <p className="display text-sm leading-tight text-brand">Tracker</p>
+        </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <ul className="space-y-0.5">
-          {visible.map((item) => (
-            <li key={item.to}>
-              <NavLink
-                to={item.to}
-                end={item.to === "/"}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  `block rounded px-3 py-2 text-sm transition-colors ${
-                    isActive
-                      ? "bg-ink-700 font-medium text-text"
-                      : "text-text-muted hover:bg-ink-700/60 hover:text-text"
-                  }`
-                }
-              >
-                {item.label}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+        {SECCIONES.map((seccion) => {
+          const visibles = seccion.items.filter(
+            (i) => !i.adminOnly || user?.role === "ADMIN",
+          );
+          if (visibles.length === 0) return null;
+
+          return (
+            <div key={seccion.titulo} className="mb-6">
+              <p className="eyebrow mb-2 px-2">{seccion.titulo}</p>
+              <ul className="space-y-0.5">
+                {visibles.map((item) => (
+                  <li key={item.to}>
+                    <NavLink
+                      to={item.to}
+                      end={item.to === "/"}
+                      onClick={onNavigate}
+                      className={({ isActive }) =>
+                        `flex items-start gap-3 rounded-lg px-2.5 py-2 transition-colors ${
+                          isActive
+                            ? "bg-brand-soft text-text"
+                            : "text-text-muted hover:bg-ink-800 hover:text-text"
+                        }`
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <span
+                            className={`mt-0.5 flex h-7 w-7 shrink-0 items-center
+                                        justify-center rounded-md border ${
+                                          isActive
+                                            ? "border-brand/40 bg-brand/15 text-brand"
+                                            : "border-ink-600 bg-ink-800 text-text-faint"
+                                        }`}
+                          >
+                            <item.icono />
+                          </span>
+                          <span className="min-w-0">
+                            <span
+                              className={`block text-sm font-medium leading-tight ${
+                                isActive ? "text-brand" : ""
+                              }`}
+                            >
+                              {item.label}
+                            </span>
+                            <span className="mt-0.5 block truncate text-micro text-text-faint">
+                              {item.detalle}
+                            </span>
+                          </span>
+                        </>
+                      )}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
 
-      <div className="border-t border-ink-600 px-5 py-4">
+      <div className="border-t border-ink-600 px-4 py-4">
         <p className="truncate text-sm font-medium">{user?.name}</p>
-        <p className="truncate text-sm text-text-faint">{user?.email}</p>
+        <p className="truncate text-micro text-text-faint">{user?.email}</p>
         {user?.role === "ADMIN" && (
-          <p className="mt-1 text-micro text-brand">Administrador</p>
+          <p className="mt-2">
+            <span
+              className="code inline-flex items-center rounded-full border
+                         border-brand/40 bg-brand-soft px-2 py-0.5 text-micro
+                         uppercase tracking-wider text-brand"
+            >
+              Administrador
+            </span>
+          </p>
         )}
-        <Button variant="ghost" className="mt-3 -ml-4" onClick={() => void signOut()}>
+        <button
+          onClick={() => void signOut()}
+          className="mt-3 flex items-center gap-2 text-sm text-text-muted
+                     transition-colors hover:text-brand"
+        >
+          <IconSalir />
           Cerrar sesión
-        </Button>
+        </button>
       </div>
     </div>
   );

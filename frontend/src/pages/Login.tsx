@@ -31,8 +31,20 @@ export function Login() {
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-sm">
-        <h1 className="text-xl font-semibold tracking-tight">Portfolio Tracker</h1>
-        <p className="mt-1 text-text-muted">Ingresá para ver tu cartera.</p>
+        <div className="mb-8 flex items-center gap-3">
+          <img
+            src="/logo.png"
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-lg object-cover"
+          />
+          <div className="leading-none">
+            <p className="display text-lg leading-tight">Portfolio</p>
+            <p className="display text-lg leading-tight text-brand">Tracker</p>
+          </div>
+        </div>
+
+        <p className="eyebrow mb-2">Acceso</p>
+        <h1 className="display text-xl">Ingresá para ver tu cartera</h1>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-5">
           <Field

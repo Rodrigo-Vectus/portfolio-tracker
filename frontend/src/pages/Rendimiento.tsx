@@ -48,7 +48,7 @@ function Cifra({
   porcentaje?: boolean;
 }) {
   return (
-    <div className="rounded border border-ink-600 bg-ink-800 p-5">
+    <div className="rounded-xl border border-ink-600 bg-ink-800 p-5">
       <p className="text-sm text-text-muted">{etiqueta}</p>
       <p className="mt-1 text-xl">
         {valor === null ? (
@@ -183,28 +183,28 @@ export function Rendimiento() {
               ]}
             >
               {datos.posiciones.map((p) => (
-                <tr key={p.symbol} className="border-b border-ink-700">
-                  <td className="px-3 py-2.5 font-medium first:pl-0 last:pr-0">
+                <tr key={p.symbol} className="border-b border-ink-600/60">
+                  <td className="px-4 py-3 font-medium">
                     {p.symbol}
                   </td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                  <td className="px-4 py-3 text-right">
                     <Num>{formatearImporte(p.open_cost_basis)}</Num>
                   </td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                  <td className="px-4 py-3 text-right">
                     <Num tono={p.valor_actual === null ? "tenue" : "neutro"}>
                       {p.valor_actual === null
                         ? "—"
                         : formatearImporte(p.valor_actual)}
                     </Num>
                   </td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                  <td className="px-4 py-3 text-right">
                     <Num tono={p.no_realizado === null ? "tenue" : tono(p.no_realizado)}>
                       {p.no_realizado === null
                         ? "—"
                         : formatearImporte(p.no_realizado)}
                     </Num>
                   </td>
-                  <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                  <td className="px-4 py-3 text-right">
                     <Num tono={p.roi === null ? "tenue" : tono(p.roi)}>
                       {p.roi === null ? "—" : formatearPorcentaje(p.roi)}
                     </Num>

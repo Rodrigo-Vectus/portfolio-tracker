@@ -39,7 +39,7 @@ function Tarjeta({
   aviso?: string;
 }) {
   return (
-    <div className="rounded border border-ink-600 bg-ink-800 p-5">
+    <div className="rounded-xl border border-ink-600 bg-ink-800 p-5">
       <p className="text-sm text-text-muted">{etiqueta}</p>
       <p className="mt-1 text-xl">
         <Num tono={tono}>{valor}</Num>

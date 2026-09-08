@@ -120,7 +120,7 @@ export function SelectorDeActivo({
 
   if (creando) {
     return (
-      <div className="rounded border border-brand/40 bg-ink-800 p-4">
+      <div className="rounded-xl border border-brand/40 bg-ink-800 p-4">
         <p className="mb-3 text-sm text-text-muted">
           Nuevo activo <span className="font-medium text-text">{consulta}</span>
         </p>
@@ -188,7 +188,7 @@ export function SelectorDeActivo({
             setAbierto(true);
           }}
           placeholder="Escribí el símbolo: AAPL, AL30…"
-          className="w-full rounded border border-ink-600 bg-ink-800 px-3 py-2 text-base
+          className="w-full rounded-lg border border-ink-600 bg-ink-900 px-3.5 py-2.5 text-base
                      placeholder:text-text-faint focus:border-brand"
         />
       </label>

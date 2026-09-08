@@ -171,7 +171,7 @@ export function Caja() {
       </div>
 
       {abierto && (
-        <div className="mb-8 max-w-2xl rounded border border-ink-600 bg-ink-800 p-5">
+        <div className="mb-8 max-w-2xl rounded-xl border border-ink-600 bg-ink-800 p-5">
           <div className="grid gap-4 sm:grid-cols-3">
             <Select
               label="Tipo"
@@ -217,7 +217,7 @@ export function Caja() {
         <p className="text-text-muted">Cargando…</p>
       ) : (
         <>
-          <div className="mb-8 rounded border border-ink-600 bg-ink-800 p-5">
+          <div className="mb-8 rounded-xl border border-ink-600 bg-ink-800 p-5">
             <p className="text-sm text-text-muted">Disponible en {saldo.currency}</p>
             <p className="mt-1 text-2xl">
               <Num
@@ -269,14 +269,14 @@ export function Caja() {
                 .slice()
                 .reverse()
                 .map((m) => (
-                  <tr key={m.tx_id} className="border-b border-ink-700">
-                    <td className="px-3 py-2.5 first:pl-0 last:pr-0">
+                  <tr key={m.tx_id} className="border-b border-ink-600/60">
+                    <td className="px-4 py-3">
                       {formatearFecha(m.fecha.slice(0, 10))}
                     </td>
-                    <td className="px-3 py-2.5 text-text-muted first:pl-0 last:pr-0">
+                    <td className="px-4 py-3 text-text-muted">
                       {m.descripcion}
                     </td>
-                    <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                    <td className="px-4 py-3 text-right">
                       <Num
                         tono={
                           signo(m.monto) === "positivo"
@@ -289,7 +289,7 @@ export function Caja() {
                         {formatearImporte(m.monto)}
                       </Num>
                     </td>
-                    <td className="px-3 py-2.5 text-right first:pl-0 last:pr-0">
+                    <td className="px-4 py-3 text-right">
                       <Num tono="tenue">{formatearImporte(m.saldo_posterior)}</Num>
                     </td>
                   </tr>

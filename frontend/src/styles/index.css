@@ -1,3 +1,7 @@
+/* Las fuentes se cargan desde index.html, que ya tiene el preconnect. Si no
+   hay internet el navegador cae a las del sistema y la interfaz sigue siendo
+   legible: ninguna funcionalidad depende de que la tipografía llegue. */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -14,22 +18,58 @@
   }
 
   body {
-    @apply bg-ink-900 text-text font-sans text-base antialiased;
+    @apply bg-ink-950 text-text font-sans text-base antialiased;
+  }
+
+  /* Titulares en mayúsculas, pesados y con el interletrado cerrado. Es lo que
+     le da el carácter a la referencia. */
+  .display {
+    @apply font-display font-extrabold uppercase tracking-tight;
   }
 
   /* Cifras alineadas en columna. En una plataforma financiera esto no es
-     estetica: comparar 1.533.600 con 425.340 exige que los digitos ocupen
-     el mismo ancho. Se usa la variante tabular de IBM Plex, no una fuente
-     monoespaciada aparte. */
+     estética: comparar 1.533.600 con 425.340 exige que los dígitos ocupen el
+     mismo ancho.
+     
+     Se usa la variante tabular de Inter y no una monoespaciada aparte. La
+     monoespaciada alineaba igual de bien pero se leía como un bloque de
+     código en medio de la interfaz: dos tipografías compitiendo donde la
+     cifra tiene que ser lo más legible de la pantalla. */
   .num {
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.01em;
+    letter-spacing: -0.005em;
   }
 
-  /* Foco visible siempre: la navegacion por teclado tiene que funcionar
-     desde la primera fase, no agregarse al final. */
+  /* Códigos, etiquetas y marcas de tiempo: ahí sí monoespaciada, porque son
+     datos técnicos y no cifras que el usuario compara entre sí. */
+  .code {
+    @apply font-mono;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Etiqueta de sección: chica, mayúscula y muy espaciada. */
+  .eyebrow {
+    @apply text-micro font-medium uppercase tracking-[0.14em] text-text-faint;
+  }
+
   :focus-visible {
-    @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-ink-900;
+    @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-ink-950;
+  }
+
+  /* La barra de desplazamiento por defecto rompe el fondo negro. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme("colors.ink.600") transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-ink-600;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
 
   @media (prefers-reduced-motion: reduce) {

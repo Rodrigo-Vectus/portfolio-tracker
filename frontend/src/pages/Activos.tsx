@@ -102,7 +102,7 @@ export function Activos() {
       </div>
 
       {abierto && (
-        <div className="mb-8 max-w-2xl rounded border border-ink-600 bg-ink-800 p-5">
+        <div className="mb-8 max-w-2xl rounded-xl border border-ink-600 bg-ink-800 p-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Símbolo"
@@ -207,13 +207,13 @@ export function Activos() {
             ]}
           >
             {activos.map((a) => (
-              <tr key={a.id} className="border-b border-ink-700">
-                <td className="px-3 py-2.5 first:pl-0 last:pr-0 font-medium">{a.symbol}</td>
-                <td className="px-3 py-2.5 first:pl-0 last:pr-0 text-text-muted">{a.name}</td>
-                <td className="px-3 py-2.5 first:pl-0 last:pr-0 text-text-muted">{a.asset_type}</td>
-                <td className="px-3 py-2.5 first:pl-0 last:pr-0 text-text-muted">{a.market ?? "—"}</td>
-                <td className="px-3 py-2.5 first:pl-0 last:pr-0 text-text-muted">{a.currency}</td>
-                <td className="px-3 py-2.5 first:pl-0 last:pr-0 text-text-muted">{a.sector ?? "—"}</td>
+              <tr key={a.id} className="border-b border-ink-600/60">
+                <td className="px-4 py-3 font-medium">{a.symbol}</td>
+                <td className="px-4 py-3 text-text-muted">{a.name}</td>
+                <td className="px-4 py-3 text-text-muted">{a.asset_type}</td>
+                <td className="px-4 py-3 text-text-muted">{a.market ?? "—"}</td>
+                <td className="px-4 py-3 text-text-muted">{a.currency}</td>
+                <td className="px-4 py-3 text-text-muted">{a.sector ?? "—"}</td>
               </tr>
             ))}
           </Tabla>
@@ -276,7 +276,7 @@ function EditarActivo({
   }
 
   return (
-    <div className="mb-8 max-w-2xl rounded border border-brand/40 bg-ink-800 p-5">
+    <div className="mb-8 max-w-2xl rounded-xl border border-brand/40 bg-ink-800 p-5">
       <p className="mb-4 text-sm text-text-muted">
         Editando <span className="font-medium text-text">{activo.symbol}</span> ·{" "}
         {activo.asset_type} · {activo.currency}
