@@ -14,13 +14,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState, Nota, Num, PageHeading } from "../components/ui";
-import { formatearImporte, signo } from "../lib/format";
+import { formatearImporte, formatearPorcentaje, signo } from "../lib/format";
+import { MINIMO_PARA_PODIO, rankear } from "../lib/ranking";
 import {
   fetchPortfolios,
   fetchPositions,
+  fetchRendimiento,
   fetchSaldo,
   type Portfolio,
   type Position,
+  type Roi,
   type Saldo,
   type Total,
 } from "../lib/finance";
@@ -108,11 +111,83 @@ function Distribucion({ posiciones }: { posiciones: Position[] }) {
   );
 }
 
+/**
+ * Mejores y peores posiciones por rendimiento.
+ *
+ * **No calcula nada**: el ROI llega de `/performance`. Acá sólo se ordena y se
+ * recorta, y eso lo hace `rankear`, que está probado aparte.
+ *
+ * Con pocas posiciones no se arma podio. Dos columnas sobre tres activos
+ * mostrarían casi los mismos de los dos lados, y un "peor rendimiento" que
+ * también figura entre los mejores no informa: sugiere una comparación que no
+ * existe.
+ */
+function Ranking({ rois }: { rois: Roi[] }) {
+  const r = rankear(rois);
+
+  if (r.ordenadas.length === 0 && r.sinDato.length === 0) {
+    return <p className="text-sm text-text-muted">No hay posiciones abiertas.</p>;
+  }
+
+  const fila = (x: Roi) => (
+    <li
+      key={x.symbol}
+      className="flex items-baseline justify-between border-b border-ink-600/60 py-2"
+    >
+      <span className="font-medium">{x.symbol}</span>
+      <Num tono={signo(x.roi) === "positivo" ? "positivo" : signo(x.roi) === "negativo" ? "negativo" : "tenue"}>
+        {formatearPorcentaje(x.roi as string)}
+      </Num>
+    </li>
+  );
+
+  return (
+    <>
+      {r.hayPodio ? (
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div>
+            <p className="mb-2 text-micro uppercase tracking-wider text-text-faint">
+              Mejores
+            </p>
+            <ul>{r.mejores.map(fila)}</ul>
+          </div>
+          <div>
+            <p className="mb-2 text-micro uppercase tracking-wider text-text-faint">
+              Peores
+            </p>
+            <ul>{r.peores.map(fila)}</ul>
+          </div>
+        </div>
+      ) : (
+        <>
+          <ul>{r.ordenadas.map(fila)}</ul>
+          {r.ordenadas.length > 0 && (
+            <p className="mt-2 text-micro text-text-faint">
+              Con menos de {MINIMO_PARA_PODIO} posiciones se muestra la lista ordenada en vez de
+              mejores y peores: serían casi las mismas de los dos lados.
+            </p>
+          )}
+        </>
+      )}
+
+      {r.sinDato.length > 0 && (
+        <p className="mt-3 text-micro text-stale">
+          Sin rendimiento calculable:{" "}
+          {r.sinDato.map((x) => x.symbol).join(", ")}. Falta la cotización o el
+          costo de lo abierto es cero. No se ordenan como si hubieran rendido
+          cero.
+        </p>
+      )}
+    </>
+  );
+}
+
 export function Dashboard() {
   const [portfolios, setPortfolios] = useState<Portfolio[] | null>(null);
   const [posiciones, setPosiciones] = useState<Position[]>([]);
   const [total, setTotal] = useState<Total | null>(null);
   const [saldo, setSaldo] = useState<Saldo | null>(null);
+  const [rois, setRois] = useState<Roi[]>([]);
 
   useEffect(() => {
     void (async () => {
@@ -125,12 +200,20 @@ export function Dashboard() {
       if (p.data.length === 0) return;
 
       const id = p.data[0].id;
-      const [pos, sal] = await Promise.all([fetchPositions(id), fetchSaldo(id)]);
+      const [pos, sal, rend] = await Promise.all([
+        fetchPositions(id),
+        fetchSaldo(id),
+        fetchRendimiento(id),
+      ]);
       if (pos.ok) {
         setPosiciones(pos.data.positions);
         setTotal(pos.data.total);
       }
       if (sal.ok) setSaldo(sal.data);
+      // El ROI viene calculado de /performance. El dashboard lo ordena, no
+      // lo calcula: repetir la fórmula acá sería una segunda copia de un
+      // cálculo financiero.
+      if (rend.ok) setRois(rend.data.posiciones);
     })();
   }, []);
 
@@ -270,17 +353,25 @@ export function Dashboard() {
         </div>
       </div>
 
+      <div className="mt-10">
+        <h2 className="mb-4 text-sm font-medium text-text-muted">
+          Rendimiento por posición
+        </h2>
+        <Ranking rois={rois} />
+      </div>
+
       <div className="mt-10 space-y-3">
         <Nota>
-          El rendimiento porcentual todavía no está: ROI, TWR y XIRR llegan en la
-          próxima fase. El porcentaje sobre "compras menos ventas" que usaba la
-          planilla se infla solo al vender, así que no se muestra ninguno hasta
-          tener las fórmulas correctas.
+          El ROI de cada posición se calcula sobre el costo de lo que sigue
+          abierto. El porcentaje sobre "compras menos ventas" que usaba la
+          planilla se infla solo al vender: ese denominador se achica en cada
+          venta. El rendimiento de la cartera entera —XIRR y TWR— está en
+          Rendimiento.
         </Nota>
         <Nota>
-          Tampoco hay evolución temporal: el sistema guarda la última cotización
-          de cada activo, no la serie histórica. Requiere los snapshots diarios
-          de una fase posterior.
+          La evolución temporal está en Historial. La serie arranca el día del
+          primer snapshot y no se puede reconstruir hacia atrás: sólo se guarda
+          la última cotización de cada activo, no el precio de cada día pasado.
         </Nota>
       </div>
     </>

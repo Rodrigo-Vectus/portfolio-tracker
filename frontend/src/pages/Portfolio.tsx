@@ -108,6 +108,7 @@ export function Portfolio() {
   //: Moneda de visualización. Vacío = la de cada operación; "USD" = convertido
   //: con el tipo de cambio de la fecha de cada compra.
   const [verEn, setVerEn] = useState("");
+  const [tipo, setTipo] = useState("");
   const [error, setError] = useState("");
   const [nombre, setNombre] = useState("Principal");
   const [moneda, setMoneda] = useState("USD");
@@ -131,7 +132,11 @@ export function Portfolio() {
     if (!elegido) return;
     void (async () => {
       setPosiciones(null);
-      const r = await fetchPositions(elegido, verEn || undefined);
+      const r = await fetchPositions(
+        elegido,
+        verEn || undefined,
+        tipo || undefined,
+      );
       if (r.ok) {
         setPosiciones(r.data.positions);
         setTotal(r.data.total);
@@ -142,7 +147,7 @@ export function Portfolio() {
         setTotal(null);
       }
     })();
-  }, [elegido, verEn]);
+  }, [elegido, verEn, tipo]);
 
   async function crear() {
     setCreando(true);
@@ -246,6 +251,22 @@ export function Portfolio() {
             <option value="USD">Dólares</option>
           </Select>
         </div>
+        {/* El filtro se resuelve en el servidor. El total que baja ya es el
+            del tipo elegido, así que la suma siempre corresponde con la lista
+            que está arriba de ella. */}
+        <div className="w-44">
+          <Select
+            label="Tipo de activo"
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+          >
+            <option value="">Todos</option>
+            <option value="CEDEAR">CEDEARs</option>
+            <option value="BOND">Bonos</option>
+            <option value="CRYPTO">Cripto</option>
+            <option value="CASH">Efectivo</option>
+          </Select>
+        </div>
         <Button variant="ghost" onClick={() => setAbierto((v) => !v)}>
           {abierto ? "Cancelar" : "Nuevo portfolio"}
         </Button>
@@ -265,8 +286,19 @@ export function Portfolio() {
         <p className="text-text-muted">Cargando posiciones…</p>
       ) : posiciones.length === 0 ? (
         <EmptyState
-          title="No hay posiciones abiertas."
-          detail="Las posiciones se calculan a partir de tus operaciones. Registrá una compra en la sección Operaciones."
+          title={
+            tipo
+              ? "No hay posiciones abiertas de ese tipo."
+              : "No hay posiciones abiertas."
+          }
+          detail={
+            // Una cartera vacía y un filtro sin resultados son dos cosas
+            // distintas, y mandar a cargar una compra cuando el problema es
+            // el filtro manda a la persona al lugar equivocado.
+            tipo
+              ? "Probá con otro tipo de activo o volvé a Todos."
+              : "Las posiciones se calculan a partir de tus operaciones. Registrá una compra en la sección Operaciones."
+          }
         />
       ) : (
         <>

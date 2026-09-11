@@ -32,7 +32,7 @@ from app.domain.market import (
     totalizar,
 )
 from app.domain.fx import SerieFx, SinTipoDeCambio
-from app.models import Asset, CostLot, PositionCache
+from app.models import Asset, AssetType, CostLot, PositionCache
 from app.models.market import PriceQuote
 
 # Faltaba definirla y `valuar_en_moneda_dura` la usaba: cualquier consulta con
@@ -84,24 +84,36 @@ async def valuar_portfolio(
     user_id: UUID,
     portfolio_id: UUID,
     ahora: datetime | None = None,
+    asset_type: AssetType | None = None,
 ) -> tuple[list[tuple[PositionCache, Asset, ValorDePosicion]], TotalDeCartera]:
     """Devuelve las posiciones valuadas y el total con su completitud.
 
     El filtro por `user_id` es redundante con el del portfolio y está a
     propósito: toda consulta financiera filtra por el usuario autenticado, y
     ese filtro no debería depender de un join que alguien olvide escribir.
+
+    **`asset_type` filtra acá y no después.** Si la selección se hiciera sobre
+    el resultado, `totalizar()` habría sumado posiciones que la pantalla no
+    muestra y el total no correspondería con la lista. Filtrando en la consulta,
+    el total es el de lo filtrado y conserva su declaración de completitud: si
+    falta la cotización de un activo que el filtro dejó afuera, el total del
+    filtro sigue siendo completo, porque ese activo no forma parte de él.
     """
     ahora = ahora or datetime.now(UTC)
+
+    condiciones = [
+        PositionCache.portfolio_id == portfolio_id,
+        PositionCache.user_id == user_id,
+        # Una posición cerrada no se valúa: no hay nada que valer.
+        PositionCache.quantity > 0,
+    ]
+    if asset_type is not None:
+        condiciones.append(Asset.asset_type == asset_type)
 
     resultado = await session.execute(
         select(PositionCache, Asset)
         .join(Asset, Asset.id == PositionCache.asset_id)
-        .where(
-            PositionCache.portfolio_id == portfolio_id,
-            PositionCache.user_id == user_id,
-            # Una posición cerrada no se valúa: no hay nada que valer.
-            PositionCache.quantity > 0,
-        )
+        .where(*condiciones)
         .order_by(Asset.symbol)
     )
     filas = resultado.all()

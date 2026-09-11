@@ -356,10 +356,23 @@ export const fetchRendimiento = (portfolioId: string, currency = "ARS") =>
     `/performance?portfolio_id=${portfolioId}&currency=${currency}`,
   );
 
-export const fetchPositions = (portfolioId: string, hardCurrency?: string) =>
+/**
+ * Posiciones de un portfolio.
+ *
+ * `assetType` filtra en el servidor, no en el cliente: así el total que vuelve
+ * es el de lo filtrado. Recortar la lista acá dejaría un total que no
+ * corresponde con lo que se ve, y retotalizarlo en el navegador sería
+ * calcular plata del lado equivocado.
+ */
+export const fetchPositions = (
+  portfolioId: string,
+  hardCurrency?: string,
+  assetType?: string,
+) =>
   api.get<PositionsResponse>(
     `/positions?portfolio_id=${portfolioId}` +
-      (hardCurrency ? `&hard_currency=${hardCurrency}` : ""),
+      (hardCurrency ? `&hard_currency=${hardCurrency}` : "") +
+      (assetType ? `&asset_type=${assetType}` : ""),
   );
 
 export type { ApiResult };

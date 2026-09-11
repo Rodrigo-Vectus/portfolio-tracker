@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import ActiveUser, require_csrf
 from app.core.timezones import fecha_de_rueda
 from app.db.session import get_session
-from app.models import Portfolio, Transaction, TransactionStatus
+from app.models import AssetType, Portfolio, Transaction, TransactionStatus
 from app.schemas.finance import (
     MovimientoIn,
     PositionOut,
@@ -241,6 +241,7 @@ async def list_positions(
     user: ActiveUser,
     session: Session,
     hard_currency: str | None = None,
+    asset_type: str | None = None,
 ) -> PositionsResponse:
     """Posiciones derivadas del libro, valuadas contra la última cotización.
 
@@ -262,11 +263,33 @@ async def list_positions(
     porque se movió el dólar esta mañana. El valor actual sí usa el de hoy, y
     esa asimetría es lo que hace que el número en dólares diga algo distinto
     del de pesos.
+
+    Con `asset_type=CEDEAR` se devuelven sólo las posiciones de ese tipo, **y
+    el total es el de lo filtrado**. El filtro se aplica en la consulta y no
+    sobre el resultado: si se recortara después, el total habría sumado lo que
+    la pantalla no muestra.
     """
     await _portfolio_propio(session, user.id, portfolio_id)
 
+    # Se valida antes de tocar la base y no se delega en PostgreSQL. El enum
+    # es nativo, así que un valor cualquiera no da un filtro vacío: aborta la
+    # transacción entera. Es el mismo patrón que convirtió un
+    # `X-Forwarded-For` con basura en un 500 sobre una columna INET.
+    tipo: AssetType | None = None
+    if asset_type is not None:
+        try:
+            tipo = AssetType(asset_type.upper())
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"'{asset_type}' no es un tipo de activo. "
+                    f"Los válidos son: {', '.join(t.value for t in AssetType)}."
+                ),
+            ) from None
+
     valuadas, total = await valuar_portfolio(
-        session, user_id=user.id, portfolio_id=portfolio_id
+        session, user_id=user.id, portfolio_id=portfolio_id, asset_type=tipo
     )
 
     # La conversión es opcional y se pide explícitamente: si el usuario no

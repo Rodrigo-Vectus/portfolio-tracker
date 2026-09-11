@@ -128,6 +128,49 @@ export function formatearCantidad(valor: string, maximo = 8): string {
   return partes.negativo ? `−${cuerpo}` : cuerpo;
 }
 
+/**
+ * Compara dos decimales **sin pasar por `number`**.
+ *
+ * Devuelve negativo si `a < b`, positivo si `a > b`, cero si son iguales.
+ *
+ * Existe porque ordenar por rendimiento es comparar, y `Number("0.1234…")`
+ * pierde dígitos antes de comparar igual que los pierde antes de mostrar. Con
+ * ROI de pocos dígitos el resultado coincidiría casi siempre, y "casi siempre"
+ * es exactamente el tipo de error que este proyecto paga seis meses después.
+ *
+ * Reutiliza `partir`, que ya maneja el signo, la notación científica y las
+ * fracciones de largo distinto. Un segundo parser sería un segundo criterio
+ * que puede divergir del primero.
+ *
+ * Una entrada que no es un número se ordena al final, nunca como cero: un cero
+ * la pondría en el medio del ranking como si fuera un rendimiento nulo.
+ */
+export function compararDecimal(a: string | null, b: string | null): number {
+  const pa = partir(a ?? "");
+  const pb = partir(b ?? "");
+  if (pa === null && pb === null) return 0;
+  if (pa === null) return -1;
+  if (pb === null) return 1;
+
+  if (pa.negativo !== pb.negativo) return pa.negativo ? -1 : 1;
+  const signoTxt = pa.negativo ? -1 : 1;
+
+  // Sin ceros a la izquierda, el número más largo es el más grande.
+  const ea = pa.entero.replace(/^0+(?=\d)/, "");
+  const eb = pb.entero.replace(/^0+(?=\d)/, "");
+  if (ea.length !== eb.length) return (ea.length < eb.length ? -1 : 1) * signoTxt;
+  if (ea !== eb) return (ea < eb ? -1 : 1) * signoTxt;
+
+  // Ya con la misma parte entera, las fracciones se comparan rellenadas al
+  // mismo largo: "0.5" es mayor que "0.45", y lexicográfico a secas diría lo
+  // contrario.
+  const largo = Math.max(pa.fraccion.length, pb.fraccion.length);
+  const fa = pa.fraccion.padEnd(largo, "0");
+  const fb = pb.fraccion.padEnd(largo, "0");
+  if (fa === fb) return 0;
+  return (fa < fb ? -1 : 1) * signoTxt;
+}
+
 /** Signo de un resultado. Determina el color, que solo significa eso. */
 export function signo(valor: string | null): "positivo" | "negativo" | "cero" {
   const partes = partir(valor ?? "0");

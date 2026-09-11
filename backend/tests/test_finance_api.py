@@ -614,3 +614,121 @@ def test_editar_un_activo_inexistente_devuelve_404(sesion: Sesion) -> None:
         json={"name": "x"},
     )
     assert r.status_code == 404
+
+
+# ------------------------------------------------------ filtro por tipo (F6)
+
+
+def _alta_activo_tipo(s: Sesion, symbol: str, asset_type: str, currency="ARS"):
+    """Alta de un activo de cualquier tipo. `_alta_activo` sólo hace CEDEARs."""
+    r = s.post(
+        "/api/assets",
+        json={
+            "symbol": symbol,
+            "name": f"{asset_type} {symbol}",
+            "asset_type": asset_type,
+            "currency": currency,
+            "market": "BYMA",
+        },
+    )
+    if r.status_code == 409:
+        listado = s.get("/api/assets").json()
+        return next(
+            a
+            for a in listado
+            if a["symbol"] == symbol and a["asset_type"] == asset_type
+        )
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def _cartera_mixta(s: Sesion):
+    """Un CEDEAR y un bono en el mismo portfolio."""
+    portfolio = _alta_portfolio(s, f"Mixta {secrets.token_hex(4)}")
+    cedear = _alta_activo_tipo(s, f"CD{secrets.token_hex(2).upper()}", "CEDEAR")
+    bono = _alta_activo_tipo(s, f"BN{secrets.token_hex(2).upper()}", "BOND")
+    assert _operacion(s, portfolio, cedear, "BUY", 10, 100, 1).status_code == 201
+    assert _operacion(s, portfolio, bono, "BUY", 5, 200, 1).status_code == 201
+    return portfolio, cedear, bono
+
+
+def test_el_filtro_por_tipo_devuelve_solo_ese_tipo(sesion: Sesion) -> None:
+    portfolio, cedear, bono = _cartera_mixta(sesion)
+
+    sin_filtro = _posiciones(sesion, portfolio)
+    assert {p["symbol"] for p in sin_filtro} == {cedear["symbol"], bono["symbol"]}
+
+    r = sesion.get(
+        f"/api/positions?portfolio_id={portfolio['id']}&asset_type=BOND"
+    )
+    assert r.status_code == 200, r.text
+    solo_bonos = r.json()["positions"]
+    assert [p["symbol"] for p in solo_bonos] == [bono["symbol"]]
+
+
+def test_el_total_es_el_de_lo_filtrado_y_no_el_de_todo(sesion: Sesion) -> None:
+    """El filtro se aplica en la consulta, no sobre el resultado.
+
+    Si se recortara después, `totalizar()` habría sumado posiciones que la
+    pantalla no muestra y el total no correspondería con la lista de arriba.
+    """
+    portfolio, _, _ = _cartera_mixta(sesion)
+
+    completo = sesion.get(
+        f"/api/positions?portfolio_id={portfolio['id']}"
+    ).json()["total"]
+    filtrado = sesion.get(
+        f"/api/positions?portfolio_id={portfolio['id']}&asset_type=BOND"
+    ).json()["total"]
+
+    assert completo["posiciones_totales"] == 2
+    assert filtrado["posiciones_totales"] == 1
+
+
+def test_un_tipo_invalido_da_422_y_no_rompe_la_sesion(sesion: Sesion) -> None:
+    """El valor se valida antes de tocar la base.
+
+    El enum es nativo de PostgreSQL: un valor cualquiera no produce un filtro
+    vacío, aborta la transacción entera. Es el mismo patrón que convirtió un
+    `X-Forwarded-For` con basura en un 500 sobre una columna INET, así que
+    además de esperar el 422 se comprueba que la consulta siguiente funcione.
+    """
+    portfolio, _, _ = _cartera_mixta(sesion)
+
+    r = sesion.get(
+        f"/api/positions?portfolio_id={portfolio['id']}&asset_type=ACCIONES"
+    )
+    assert r.status_code == 422, r.text
+    assert "ACCIONES" in r.text
+
+    # La sesión sigue viva: no quedó una transacción abortada.
+    assert len(_posiciones(sesion, portfolio)) == 2
+
+
+def test_el_filtro_por_tipo_no_cruza_carteras(client: TestClient, usuario, admin) -> None:
+    """Filtrar no es una puerta de atrás al portfolio de otro.
+
+    Las dos sesiones comparten el `TestClient`, que es de alcance `session`, y
+    con él la cookie del CSRF. Un login nuevo pisa la cookie del anterior, así
+    que el token que la primera sesión guardó deja de coincidir con lo que el
+    cliente manda y sus POST empiezan a dar 403. Por eso se limpian las
+    cookies antes de cada login y se rearma la sesión que se vuelva a usar.
+    """
+    propia = Sesion(client, *usuario)
+    portfolio, _, bono = _cartera_mixta(propia)
+
+    client.cookies.clear()
+    ajena = Sesion(client, *admin)
+
+    r = ajena.get(
+        f"/api/positions?portfolio_id={portfolio['id']}&asset_type=BOND"
+    )
+    assert r.status_code == 404, r.text
+
+    # Y el dueño sigue viendo lo suyo: el 404 es por ajeno, no por el filtro.
+    client.cookies.clear()
+    propia2 = Sesion(client, *usuario)
+    suyas = propia2.get(
+        f"/api/positions?portfolio_id={portfolio['id']}&asset_type=BOND"
+    ).json()["positions"]
+    assert [p["symbol"] for p in suyas] == [bono["symbol"]]
