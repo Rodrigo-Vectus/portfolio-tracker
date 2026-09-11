@@ -22,7 +22,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { EmptyState, Nota, Num, PageHeading, Select } from "../components/ui";
+import {
+  Button,
+  EmptyState,
+  Field,
+  Nota,
+  Num,
+  PageHeading,
+  Select,
+} from "../components/ui";
 import { formatearFecha, formatearImporte, signo } from "../lib/format";
 import {
   fetchHistorial,
@@ -105,6 +113,8 @@ function Marca({ cx, cy, payload }: any) {
 export function Historial() {
   const [portfolios, setPortfolios] = useState<Portfolio[] | null>(null);
   const [elegido, setElegido] = useState("");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
   const [datos, setDatos] = useState<HistorialT | null>(null);
 
   useEffect(() => {
@@ -123,10 +133,14 @@ export function Historial() {
     if (!elegido) return;
     void (async () => {
       setDatos(null);
-      const r = await fetchHistorial(elegido);
+      const r = await fetchHistorial(
+        elegido,
+        desde || undefined,
+        hasta || undefined,
+      );
       if (r.ok) setDatos(r.data);
     })();
-  }, [elegido]);
+  }, [elegido, desde, hasta]);
 
   if (portfolios === null) {
     return (
@@ -166,21 +180,53 @@ export function Historial() {
         subtitle="Cómo evolucionó el valor de tu cartera, día a día."
       />
 
-      {portfolios.length > 1 && (
-        <div className="mb-6 w-56">
-          <Select
-            label="Portfolio"
-            value={elegido}
-            onChange={(e) => setElegido(e.target.value)}
-          >
-            {portfolios.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
+      <div className="mb-6 flex flex-wrap items-end gap-4">
+        {portfolios.length > 1 && (
+          <div className="w-56">
+            <Select
+              label="Portfolio"
+              value={elegido}
+              onChange={(e) => setElegido(e.target.value)}
+            >
+              {portfolios.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+        {/* Acotar el período no cambia los puntos: cada uno sigue siendo el
+            mismo cierre con su misma marca de estimado. Sólo cambia cuántos
+            se piden. */}
+        <div className="w-40">
+          <Field
+            label="Desde"
+            type="date"
+            value={desde}
+            onChange={(e) => setDesde(e.target.value)}
+          />
         </div>
-      )}
+        <div className="w-40">
+          <Field
+            label="Hasta"
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+          />
+        </div>
+        {(desde || hasta) && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setDesde("");
+              setHasta("");
+            }}
+          >
+            Ver todo
+          </Button>
+        )}
+      </div>
 
       {datos === null ? (
         <p className="text-text-muted">Cargando…</p>

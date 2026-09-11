@@ -34,6 +34,7 @@ import {
   fetchAssets,
   fetchPortfolios,
   fetchTransactions,
+  type FiltroOperaciones,
   type Account,
   type Asset,
   type Portfolio,
@@ -62,6 +63,10 @@ export function Operaciones() {
   const [elegido, setElegido] = useState("");
   const [operaciones, setOperaciones] = useState<Transaction[] | null>(null);
   const [verAnuladas, setVerAnuladas] = useState(false);
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+  const [txType, setTxType] = useState("");
+  const [accountFiltro, setAccountFiltro] = useState("");
   const [error, setError] = useState("");
   const [abierto, setAbierto] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -96,9 +101,9 @@ export function Operaciones() {
     })();
   }, []);
 
-  async function cargar(portfolioId: string, anuladas: boolean) {
+  async function cargar(portfolioId: string, filtro: FiltroOperaciones) {
     setOperaciones(null);
-    const r = await fetchTransactions(portfolioId, anuladas);
+    const r = await fetchTransactions(portfolioId, filtro);
     if (r.ok) {
       setOperaciones(r.data);
       setError("");
@@ -108,9 +113,22 @@ export function Operaciones() {
     }
   }
 
+  const hayFiltro = Boolean(desde || hasta || txType || accountFiltro);
+
+  const filtro: FiltroOperaciones = {
+    incluirAnuladas: verAnuladas,
+    desde: desde || undefined,
+    hasta: hasta || undefined,
+    txType: txType || undefined,
+    accountId: accountFiltro || undefined,
+  };
+
   useEffect(() => {
-    if (elegido) void cargar(elegido, verAnuladas);
-  }, [elegido, verAnuladas]);
+    if (elegido) void cargar(elegido, filtro);
+    // El filtro se arma en cada render, así que se depende de sus campos y no
+    // del objeto: comparar el objeto dispararía la carga en cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elegido, verAnuladas, desde, hasta, txType, accountFiltro]);
 
   const activo = activos.find((a) => a.id === assetId);
 
@@ -143,7 +161,7 @@ export function Operaciones() {
     setCantidad("");
     setPrecio("");
     setAbierto(false);
-    void cargar(elegido, verAnuladas);
+    void cargar(elegido, filtro);
   }
 
   async function anular(id: string) {
@@ -161,7 +179,7 @@ export function Operaciones() {
       return;
     }
     setError("");
-    void cargar(elegido, verAnuladas);
+    void cargar(elegido, filtro);
   }
 
   if (portfolios.length === 0) {
@@ -210,6 +228,72 @@ export function Operaciones() {
           />
           Mostrar anuladas
         </label>
+      </div>
+
+      {/* Los filtros se resuelven en el servidor. El período se compara contra
+          el día de rueda, no contra el instante: una compra de las 22:30
+          pertenece al día en que la hiciste, no al siguiente en UTC. */}
+      <div className="mb-6 flex flex-wrap items-end gap-4 border-t border-ink-600 pt-5">
+        <div className="w-40">
+          <Field
+            label="Desde"
+            type="date"
+            value={desde}
+            onChange={(e) => setDesde(e.target.value)}
+          />
+        </div>
+        <div className="w-40">
+          <Field
+            label="Hasta"
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+          />
+        </div>
+        <div className="w-44">
+          <Select
+            label="Tipo"
+            value={txType}
+            onChange={(e) => setTxType(e.target.value)}
+          >
+            <option value="">Todos</option>
+            <option value="BUY">Compras</option>
+            <option value="SELL">Ventas</option>
+            <option value="DEPOSIT">Depósitos</option>
+            <option value="WITHDRAWAL">Retiros</option>
+            <option value="DIVIDEND">Dividendos</option>
+            <option value="FEE">Costos</option>
+            <option value="TRANSFER">Transferencias</option>
+          </Select>
+        </div>
+        <div className="w-48">
+          <Select
+            label="Cuenta"
+            value={accountFiltro}
+            onChange={(e) => setAccountFiltro(e.target.value)}
+            hint="Las posiciones no se filtran por cuenta: son del portfolio."
+          >
+            <option value="">Todas</option>
+            {cuentas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        {hayFiltro && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setDesde("");
+              setHasta("");
+              setTxType("");
+              setAccountFiltro("");
+            }}
+          >
+            Limpiar filtros
+          </Button>
+        )}
       </div>
 
       {abierto && (
@@ -303,8 +387,16 @@ export function Operaciones() {
         <p className="text-text-muted">Cargando…</p>
       ) : operaciones.length === 0 ? (
         <EmptyState
-          title="No hay operaciones registradas."
-          detail="Registrá tu primera compra. La posición se calcula sola a partir del libro."
+          title={
+            hayFiltro
+              ? "No hay operaciones que cumplan el filtro."
+              : "No hay operaciones registradas."
+          }
+          detail={
+            hayFiltro
+              ? "Ampliá el período o limpiá los filtros."
+              : "Registrá tu primera compra. La posición se calcula sola a partir del libro."
+          }
         />
       ) : (
         <Tabla

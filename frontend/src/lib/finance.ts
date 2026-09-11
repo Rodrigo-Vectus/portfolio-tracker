@@ -222,11 +222,36 @@ export const crearAccount = (body: {
 export const crearPortfolio = (body: { name: string; base_currency: string }) =>
   api.post<Portfolio>("/portfolios", body, true);
 
-export const fetchTransactions = (portfolioId: string, incluirAnuladas = false) =>
-  api.get<Transaction[]>(
-    `/transactions?portfolio_id=${portfolioId}` +
-      (incluirAnuladas ? "&incluir_anuladas=true" : ""),
-  );
+/** Filtros del listado de operaciones. Todos opcionales. */
+export interface FiltroOperaciones {
+  incluirAnuladas?: boolean;
+  /** `YYYY-MM-DD`, inclusivo. Se compara contra el día de rueda. */
+  desde?: string;
+  /** `YYYY-MM-DD`, inclusivo. */
+  hasta?: string;
+  txType?: string;
+  accountId?: string;
+}
+
+/**
+ * Operaciones de un portfolio.
+ *
+ * El período se filtra en el servidor contra `trade_date`, el día de rueda.
+ * Filtrar contra el instante mandaría una compra de las 22:30 al día
+ * siguiente, que es el bug que ya se corrigió del lado del backend.
+ */
+export const fetchTransactions = (
+  portfolioId: string,
+  filtro: FiltroOperaciones = {},
+) => {
+  const q = new URLSearchParams({ portfolio_id: portfolioId });
+  if (filtro.incluirAnuladas) q.set("incluir_anuladas", "true");
+  if (filtro.desde) q.set("desde", filtro.desde);
+  if (filtro.hasta) q.set("hasta", filtro.hasta);
+  if (filtro.txType) q.set("tx_type", filtro.txType);
+  if (filtro.accountId) q.set("account_id", filtro.accountId);
+  return api.get<Transaction[]>(`/transactions?${q.toString()}`);
+};
 
 export const crearOperacion = (body: NuevaOperacion) =>
   api.post<Transaction>("/transactions", body, true);
@@ -348,8 +373,16 @@ export interface Historial {
   nota: string | null;
 }
 
-export const fetchHistorial = (portfolioId: string) =>
-  api.get<Historial>(`/history?portfolio_id=${portfolioId}`);
+export const fetchHistorial = (
+  portfolioId: string,
+  desde?: string,
+  hasta?: string,
+) => {
+  const q = new URLSearchParams({ portfolio_id: portfolioId });
+  if (desde) q.set("desde", desde);
+  if (hasta) q.set("hasta", hasta);
+  return api.get<Historial>(`/history?${q.toString()}`);
+};
 
 export const fetchRendimiento = (portfolioId: string, currency = "ARS") =>
   api.get<Rendimiento>(

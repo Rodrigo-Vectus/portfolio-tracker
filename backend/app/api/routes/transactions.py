@@ -12,7 +12,7 @@ deja de serlo, la salida es mover el recalculo al worker **y marcar el dato
 con su `as_of`**, no dejarlo en silencio.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
@@ -24,7 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import ActiveUser, require_csrf
 from app.core.timezones import fecha_de_rueda
 from app.db.session import get_session
-from app.models import AssetType, Portfolio, Transaction, TransactionStatus
+from app.models import (
+    AssetType,
+    Portfolio,
+    Transaction,
+    TransactionStatus,
+    TransactionType,
+)
 from app.schemas.finance import (
     MovimientoIn,
     PositionOut,
@@ -54,6 +60,23 @@ router = APIRouter(tags=["operaciones"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 NO_ENCONTRADO = HTTPException(status.HTTP_404_NOT_FOUND, detail="No encontrado.")
+
+
+def _rango_valido(desde: date | None, hasta: date | None) -> None:
+    """Rechaza un período dado vuelta.
+
+    Sin esto la consulta devuelve una lista vacia, que se lee como "no hay
+    operaciones en ese período" cuando lo que pasa es que el período no
+    existe. Un vacio silencioso es peor que un error: parece un dato.
+    """
+    if desde is not None and hasta is not None and desde > hasta:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"El período está al revés: 'desde' ({desde.isoformat()}) es "
+                f"posterior a 'hasta' ({hasta.isoformat()})."
+            ),
+        )
 
 
 async def _en_moneda_dura(
@@ -109,8 +132,43 @@ async def list_transactions(
     user: ActiveUser,
     session: Session,
     incluir_anuladas: bool = False,
+    desde: date | None = None,
+    hasta: date | None = None,
+    tx_type: str | None = None,
+    account_id: UUID | None = None,
 ) -> list[Transaction]:
+    """Operaciones del portfolio, filtrables.
+
+    **El período se filtra por `trade_date`, no por `executed_at`.** Una compra
+    de las 22:30 en Buenos Aires es 01:30 UTC del día siguiente, y filtrar por
+    el instante la mandaría a otra rueda. `trade_date` ya guarda el día local
+    que corresponde, que es el que la persona tiene en la cabeza cuando pide
+    "las de septiembre".
+
+    `desde` y `hasta` son **inclusivos**.
+
+    `account_id` no necesita comprobarse: la consulta ya filtra por el usuario
+    autenticado, así que una cuenta ajena devuelve la lista vacía igual que una
+    inexistente y no permite distinguir entre las dos.
+    """
     await _portfolio_propio(session, user.id, portfolio_id)
+
+    _rango_valido(desde, hasta)
+
+    # El enum es nativo: un valor cualquiera no filtra de menos, aborta la
+    # transaccion. Se valida antes de llegar a la base.
+    tipo: TransactionType | None = None
+    if tx_type is not None:
+        try:
+            tipo = TransactionType(tx_type.upper())
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"'{tx_type}' no es un tipo de operacion. "
+                    f"Los validos son: {', '.join(t.value for t in TransactionType)}."
+                ),
+            ) from None
 
     query = select(Transaction).where(
         Transaction.portfolio_id == portfolio_id,
@@ -120,6 +178,14 @@ async def list_transactions(
     )
     if not incluir_anuladas:
         query = query.where(Transaction.status == TransactionStatus.ACTIVE)
+    if desde:
+        query = query.where(Transaction.trade_date >= desde)
+    if hasta:
+        query = query.where(Transaction.trade_date <= hasta)
+    if tipo is not None:
+        query = query.where(Transaction.tx_type == tipo)
+    if account_id is not None:
+        query = query.where(Transaction.account_id == account_id)
 
     result = await session.execute(query.order_by(Transaction.executed_at))
     return list(result.scalars().all())
@@ -493,7 +559,11 @@ async def get_rendimiento(
     "/history", response_model=HistorialOut, summary="Evolucion de la cartera"
 )
 async def get_historial(
-    portfolio_id: UUID, user: ActiveUser, session: Session
+    portfolio_id: UUID,
+    user: ActiveUser,
+    session: Session,
+    desde: date | None = None,
+    hasta: date | None = None,
 ) -> HistorialOut:
     """Serie diaria del valor de la cartera.
 
@@ -505,23 +575,46 @@ async def get_historial(
 
     Los dias sin valuacion vienen con `total_value` en `null` y su motivo. El
     grafico corta ahi en vez de interpolar.
+
+    `desde` y `hasta` acotan el período y son **inclusivos**. Acotar no cambia
+    los puntos: cada uno sigue siendo el mismo cierre con su misma marca de
+    estimado. Lo unico que cambia es cuantos se devuelven.
     """
     await _portfolio_propio(session, user.id, portfolio_id)
+
+    _rango_valido(desde, hasta)
+
     puntos = await serie_de_snapshots(
-        session, user_id=user.id, portfolio_id=portfolio_id
+        session, user_id=user.id, portfolio_id=portfolio_id, desde=desde, hasta=hasta
     )
+
+    # Una serie que no existe y un período sin puntos son dos cosas distintas,
+    # y el aviso tiene que mandar a la persona al lugar correcto: a esperar el
+    # primer cierre en un caso, a cambiar el período en el otro.
+    acotado = desde is not None or hasta is not None
 
     nota = None
     if not puntos:
         nota = (
-            "Todavia no hay historial. La serie arranca con el primer cierre "
-            "diario y crece a partir de ahi: no se puede reconstruir hacia "
-            "atras porque no existe el precio historico de cada activo."
+            "No hay snapshots en el período elegido. Probá con un rango más "
+            "amplio."
+            if acotado
+            else (
+                "Todavia no hay historial. La serie arranca con el primer "
+                "cierre diario y crece a partir de ahi: no se puede "
+                "reconstruir hacia atras porque no existe el precio historico "
+                "de cada activo."
+            )
         )
     elif len(puntos) < 2:
         nota = (
-            "Hay un solo punto. El grafico necesita al menos dos dias para "
-            "dibujar una linea."
+            "Hay un solo punto en el período elegido. El grafico necesita al "
+            "menos dos dias para dibujar una linea."
+            if acotado
+            else (
+                "Hay un solo punto. El grafico necesita al menos dos dias "
+                "para dibujar una linea."
+            )
         )
 
     return HistorialOut(

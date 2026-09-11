@@ -161,14 +161,22 @@ async def serie(
     user_id: UUID,
     portfolio_id: UUID,
     desde: date | None = None,
+    hasta: date | None = None,
 ) -> list[PortfolioSnapshot]:
-    """Serie de snapshots, del más viejo al más nuevo."""
+    """Serie de snapshots, del más viejo al más nuevo.
+
+    `desde` y `hasta` son **inclusivos**: pedir del 1 al 31 trae los dos
+    extremos. Un rango que excluyera el último día haría que "hasta fin de mes"
+    devolviera un mes menos un día sin avisar.
+    """
     query = select(PortfolioSnapshot).where(
         PortfolioSnapshot.portfolio_id == portfolio_id,
         PortfolioSnapshot.user_id == user_id,
     )
     if desde:
         query = query.where(PortfolioSnapshot.snapshot_date >= desde)
+    if hasta:
+        query = query.where(PortfolioSnapshot.snapshot_date <= hasta)
 
     resultado = await session.execute(query.order_by(PortfolioSnapshot.snapshot_date))
     return list(resultado.scalars().all())

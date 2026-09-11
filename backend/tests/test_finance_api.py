@@ -732,3 +732,172 @@ def test_el_filtro_por_tipo_no_cruza_carteras(client: TestClient, usuario, admin
         f"/api/positions?portfolio_id={portfolio['id']}&asset_type=BOND"
     ).json()["positions"]
     assert [p["symbol"] for p in suyas] == [bono["symbol"]]
+
+
+# ------------------------------------------------ filtros de operaciones (F6)
+
+
+def _operaciones(s: Sesion, portfolio, **filtros) -> list:
+    q = "&".join(f"{k}={v}" for k, v in filtros.items() if v is not None)
+    url = f"/api/transactions?portfolio_id={portfolio['id']}"
+    return s.get(f"{url}&{q}" if q else url).json()
+
+
+def test_el_periodo_filtra_por_dia_de_rueda(sesion: Sesion) -> None:
+    """El filtro compara contra `trade_date`, no contra `executed_at`.
+
+    Una compra de las 22:30 en Buenos Aires es 01:30 UTC del día siguiente.
+    Filtrando por el instante caería fuera del día en que se hizo, que es
+    justo el bug que ya se corrigió del lado del servidor.
+    """
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion, f"Rueda {secrets.token_hex(4)}")
+
+    assert (
+        _operacion(
+            sesion,
+            portfolio,
+            activo,
+            "BUY",
+            1,
+            100,
+            10,
+            executed_at="2025-06-10T22:30:00",
+        ).status_code
+        == 201
+    )
+
+    del_dia = _operaciones(sesion, portfolio, desde="2025-06-10", hasta="2025-06-10")
+    assert len(del_dia) == 1
+
+    del_siguiente = _operaciones(
+        sesion, portfolio, desde="2025-06-11", hasta="2025-06-11"
+    )
+    assert del_siguiente == []
+
+
+def test_los_extremos_del_periodo_entran(sesion: Sesion) -> None:
+    """`desde` y `hasta` son inclusivos.
+
+    Si el último día quedara afuera, pedir "hasta fin de mes" devolvería un
+    mes menos un día sin decirlo.
+    """
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion, f"Extremos {secrets.token_hex(4)}")
+
+    for dia in (1, 5, 10):
+        assert (
+            _operacion(sesion, portfolio, activo, "BUY", 1, 100, dia).status_code == 201
+        )
+
+    assert len(_operaciones(sesion, portfolio, desde="2025-06-01")) == 3
+    assert len(_operaciones(sesion, portfolio, hasta="2025-06-10")) == 3
+    assert len(_operaciones(sesion, portfolio, desde="2025-06-05", hasta="2025-06-05")) == 1
+
+
+def test_un_periodo_al_reves_no_devuelve_una_lista_vacia(sesion: Sesion) -> None:
+    """Un vacío silencioso se leería como "no hay operaciones en ese período".
+
+    Lo que pasa es que el período no existe, y eso es un error de entrada, no
+    un resultado.
+    """
+    portfolio = _alta_portfolio(sesion, f"Reves {secrets.token_hex(4)}")
+
+    r = sesion.get(
+        f"/api/transactions?portfolio_id={portfolio['id']}"
+        "&desde=2025-06-10&hasta=2025-06-01"
+    )
+    assert r.status_code == 422, r.text
+
+
+def test_el_filtro_por_tipo_de_operacion_separa_compras_de_ventas(
+    sesion: Sesion,
+) -> None:
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion, f"Tipos {secrets.token_hex(4)}")
+
+    assert _operacion(sesion, portfolio, activo, "BUY", 10, 100, 1).status_code == 201
+    assert _operacion(sesion, portfolio, activo, "SELL", 4, 150, 5).status_code == 201
+
+    compras = _operaciones(sesion, portfolio, tx_type="BUY")
+    ventas = _operaciones(sesion, portfolio, tx_type="SELL")
+
+    assert [o["tx_type"] for o in compras] == ["BUY"]
+    assert [o["tx_type"] for o in ventas] == ["SELL"]
+
+
+def test_un_tipo_de_operacion_invalido_da_422(sesion: Sesion) -> None:
+    """Mismo criterio que el tipo de activo: se valida antes de la base."""
+    portfolio = _alta_portfolio(sesion, f"TipoMalo {secrets.token_hex(4)}")
+
+    r = sesion.get(
+        f"/api/transactions?portfolio_id={portfolio['id']}&tx_type=COMPRA"
+    )
+    assert r.status_code == 422, r.text
+    assert "COMPRA" in r.text
+
+    # La sesión sigue viva: no quedó una transacción abortada.
+    assert _operaciones(sesion, portfolio) == []
+
+
+def test_el_filtro_por_cuenta_separa_los_brokers(sesion: Sesion) -> None:
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion, f"Cuentas {secrets.token_hex(4)}")
+
+    def cuenta(nombre: str):
+        r = sesion.post(
+            "/api/accounts",
+            json={"name": nombre, "account_type": "BROKER", "default_currency": "ARS"},
+        )
+        assert r.status_code == 201, r.text
+        return r.json()
+
+    una = cuenta(f"IOL {secrets.token_hex(3)}")
+    otra = cuenta(f"Otro {secrets.token_hex(3)}")
+
+    assert (
+        _operacion(
+            sesion, portfolio, activo, "BUY", 1, 100, 1, account_id=una["id"]
+        ).status_code
+        == 201
+    )
+    assert (
+        _operacion(
+            sesion, portfolio, activo, "BUY", 2, 100, 2, account_id=otra["id"]
+        ).status_code
+        == 201
+    )
+
+    de_una = _operaciones(sesion, portfolio, account_id=una["id"])
+    assert [o["account_id"] for o in de_una] == [una["id"]]
+
+
+def test_el_historial_se_puede_acotar_por_periodo(sesion: Sesion) -> None:
+    """Sin snapshots la respuesta es vacía, y el aviso distingue el motivo.
+
+    Con un período elegido, el mensaje manda a ampliar el rango; sin período,
+    a esperar el primer cierre diario. Son dos situaciones distintas y llevan
+    a acciones distintas.
+    """
+    portfolio = _alta_portfolio(sesion, f"Hist {secrets.token_hex(4)}")
+
+    sin_filtro = sesion.get(f"/api/history?portfolio_id={portfolio['id']}").json()
+    assert sin_filtro["puntos"] == []
+    assert "primer cierre" in sin_filtro["nota"]
+
+    con_filtro = sesion.get(
+        f"/api/history?portfolio_id={portfolio['id']}"
+        "&desde=2025-01-01&hasta=2025-01-31"
+    ).json()
+    assert con_filtro["puntos"] == []
+    assert "período" in con_filtro["nota"]
+
+
+def test_el_historial_tambien_rechaza_un_periodo_al_reves(sesion: Sesion) -> None:
+    portfolio = _alta_portfolio(sesion, f"HistReves {secrets.token_hex(4)}")
+
+    r = sesion.get(
+        f"/api/history?portfolio_id={portfolio['id']}"
+        "&desde=2025-06-10&hasta=2025-06-01"
+    )
+    assert r.status_code == 422, r.text
