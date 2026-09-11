@@ -33,6 +33,8 @@ import {
   crearPortfolio,
   fetchPortfolios,
   fetchPositions,
+  fetchPreferencias,
+  guardarPreferencias,
   type Portfolio as PortfolioT,
   type Position,
   type PriceStatus,
@@ -107,7 +109,11 @@ export function Portfolio() {
   const [total, setTotal] = useState<Total | null>(null);
   //: Moneda de visualización. Vacío = la de cada operación; "USD" = convertido
   //: con el tipo de cambio de la fecha de cada compra.
-  const [verEn, setVerEn] = useState("");
+  // `null` mientras no se sabe cuál es la preferencia guardada. Distinto de
+  // `""`, que ya es una elección: moneda original. Sin esa distinción la
+  // pantalla pediría las posiciones sin convertir y después las volvería a
+  // pedir en dólares, mostrando un parpadeo de números.
+  const [verEn, setVerEn] = useState<string | null>(null);
   const [tipo, setTipo] = useState("");
   const [error, setError] = useState("");
   const [nombre, setNombre] = useState("Principal");
@@ -130,6 +136,10 @@ export function Portfolio() {
 
   useEffect(() => {
     if (!elegido) return;
+    // Sin la preferencia todavía leída no se pide nada: pedir primero sin
+    // convertir y después en dólares mostraría dos juegos de números
+    // distintos para la misma cartera en menos de un segundo.
+    if (verEn === null) return;
     void (async () => {
       setPosiciones(null);
       const r = await fetchPositions(
@@ -148,6 +158,19 @@ export function Portfolio() {
       }
     })();
   }, [elegido, verEn, tipo]);
+
+  // La preferencia se lee una sola vez, al entrar.
+  useEffect(() => {
+    void fetchPreferencias().then((r) => {
+      setVerEn(r.ok ? (r.data.display_currency ?? "") : "");
+    });
+  }, []);
+
+  /** Cambiar la moneda acá la guarda: es la misma preferencia que Configuración. */
+  function cambiarMoneda(valor: string) {
+    setVerEn(valor);
+    void guardarPreferencias(valor === "" ? null : valor);
+  }
 
   async function crear() {
     setCreando(true);
@@ -244,8 +267,10 @@ export function Portfolio() {
         <div className="w-44">
           <Select
             label="Ver en"
-            value={verEn}
-            onChange={(e) => setVerEn(e.target.value)}
+            value={verEn ?? ""}
+            disabled={verEn === null}
+            onChange={(e) => cambiarMoneda(e.target.value)}
+            hint="Se recuerda para la próxima vez."
           >
             <option value="">Moneda original</option>
             <option value="USD">Dólares</option>

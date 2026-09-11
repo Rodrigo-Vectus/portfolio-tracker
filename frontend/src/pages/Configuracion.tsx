@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
-import { EmptyState, PageHeading } from "../components/ui";
+import { Button, ErrorNote, Nota, PageHeading, Select } from "../components/ui";
+import {
+  fetchPreferencias,
+  guardarPreferencias,
+  type Preferencias,
+} from "../lib/finance";
 
 interface Meta {
   version: string;
@@ -64,13 +69,97 @@ export function Configuracion() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-medium text-text-muted">Preferencias personales</h2>
-        <EmptyState
-          title="Todavía no son editables."
-          detail="Elegir tu propia moneda de visualización y fuente de precios requiere que el motor de cotizaciones exista. Se habilita en la fase 3."
-        />
+        <h2 className="mb-3 text-sm font-medium text-text-muted">
+          Preferencias personales
+        </h2>
+        <MonedaDeVisualizacion />
       </section>
     </>
+  );
+}
+
+/**
+ * Elección de la moneda en la que se muestra la cartera.
+ *
+ * Dos opciones y no tres: dólares, o la moneda original de cada activo. No
+ * hay "pesos" porque la conversión que el sistema sabe hacer produce dólares
+ * y sólo dólares —la serie de tipo de cambio es USD/ARS—, y ofrecer una
+ * moneda que después no se puede cumplir es prometer un número que no existe.
+ */
+function MonedaDeVisualizacion() {
+  const [prefs, setPrefs] = useState<Preferencias | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState("");
+  const [guardado, setGuardado] = useState(false);
+
+  useEffect(() => {
+    void fetchPreferencias().then((r) => {
+      if (r.ok) setPrefs(r.data);
+      else setError(r.error);
+    });
+  }, []);
+
+  async function cambiar(valor: string) {
+    setGuardando(true);
+    setError("");
+    setGuardado(false);
+    const r = await guardarPreferencias(valor === "" ? null : valor);
+    if (r.ok) {
+      setPrefs(r.data);
+      setGuardado(true);
+    } else {
+      setError(r.error);
+    }
+    setGuardando(false);
+  }
+
+  if (prefs === null) {
+    return <p className="text-sm text-text-faint">Consultando...</p>;
+  }
+
+  return (
+    <div className="max-w-md">
+      <div className="w-64">
+        <Select
+          label="Moneda de visualización"
+          value={prefs.display_currency ?? ""}
+          disabled={guardando}
+          onChange={(e) => void cambiar(e.target.value)}
+        >
+          <option value="">Moneda original de cada activo</option>
+          <option value="USD">Dólares</option>
+        </Select>
+      </div>
+
+      {error && (
+        <div className="mt-3">
+          <ErrorNote>{error}</ErrorNote>
+        </div>
+      )}
+      {guardado && !error && (
+        <p className="mt-3 text-micro text-text-faint">Preferencia guardada.</p>
+      )}
+
+      <Nota>
+        En dólares, el costo de cada compra se convierte con el tipo de cambio
+        de su propia fecha y el valor actual con el de hoy. Esa asimetría es a
+        propósito: un costo histórico no cambia porque se movió el dólar esta
+        mañana. Convertir las dos puntas con el mismo tipo de cambio daría un
+        resultado idéntico al de pesos, que era uno de los errores de la
+        planilla.
+      </Nota>
+
+      {prefs.display_currency !== null && (
+        <Button
+          variant="ghost"
+          className="mt-3"
+          disabled={guardando}
+          onClick={() => void cambiar("")}
+        >
+          Ver cada activo en su moneda
+        </Button>
+      )}
+    </div>
   );
 }
 

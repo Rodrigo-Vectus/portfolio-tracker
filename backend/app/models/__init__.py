@@ -30,6 +30,7 @@ from app.models.market import (
     ProviderLog,
 )
 from app.models.refresh_token import RefreshToken
+from app.models.settings import UserSettings
 from app.models.transaction import Transaction
 from app.models.user import User
 
@@ -60,5 +61,6 @@ __all__ = [
     "TransactionStatus",
     "TransactionType",
     "User",
+    "UserSettings",
     "UserRole",
 ]

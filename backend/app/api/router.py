@@ -2,7 +2,15 @@
 
 from fastapi import APIRouter
 
-from app.api.routes import auth, health, meta, portfolio, transactions, users
+from app.api.routes import (
+    auth,
+    health,
+    meta,
+    portfolio,
+    settings,
+    transactions,
+    users,
+)
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
@@ -11,3 +19,4 @@ api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(portfolio.router)
 api_router.include_router(transactions.router)
+api_router.include_router(settings.router)

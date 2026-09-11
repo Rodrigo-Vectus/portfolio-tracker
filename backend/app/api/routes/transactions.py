@@ -61,6 +61,10 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 NO_ENCONTRADO = HTTPException(status.HTTP_404_NOT_FOUND, detail="No encontrado.")
 
+# Las monedas duras en las que el sistema sabe valuar. Hoy una sola: la serie
+# de FX es USD/ARS y no hay otra cargada.
+MONEDAS_DURAS = ("USD",)
+
 
 def _rango_valido(desde: date | None, hasta: date | None) -> None:
     """Rechaza un período dado vuelta.
@@ -336,6 +340,19 @@ async def list_positions(
     la pantalla no muestra.
     """
     await _portfolio_propio(session, user.id, portfolio_id)
+
+    # La conversion produce dolares y solo dolares: la serie que se carga es
+    # USD/ARS y la moneda de salida esta fija. Aceptar cualquier codigo
+    # devolveria importes en dolares rotulados con la moneda que pidieron, que
+    # es presentar un numero como algo que no es.
+    if hard_currency is not None and hard_currency.upper() not in MONEDAS_DURAS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"No se puede valuar en '{hard_currency}'. "
+                f"La unica moneda dura disponible es: {', '.join(MONEDAS_DURAS)}."
+            ),
+        )
 
     # Se valida antes de tocar la base y no se delega en PostgreSQL. El enum
     # es nativo, así que un valor cualquiera no da un filtro vacío: aborta la

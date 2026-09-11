@@ -384,6 +384,23 @@ export const fetchHistorial = (
   return api.get<Historial>(`/history?${q.toString()}`);
 };
 
+/**
+ * Preferencias del usuario.
+ *
+ * `display_currency` en `null` significa **la moneda original de cada
+ * activo**: no se convierte nada. No hereda del default del sistema, porque
+ * la conversión a moneda dura se pide de forma explícita (D55).
+ */
+export interface Preferencias {
+  display_currency: string | null;
+}
+
+export const fetchPreferencias = () => api.get<Preferencias>("/settings");
+
+/** `null` borra la elección y vuelve al default del sistema. */
+export const guardarPreferencias = (displayCurrency: string | null) =>
+  api.patch<Preferencias>("/settings", { display_currency: displayCurrency }, true);
+
 export const fetchRendimiento = (portfolioId: string, currency = "ARS") =>
   api.get<Rendimiento>(
     `/performance?portfolio_id=${portfolioId}&currency=${currency}`,

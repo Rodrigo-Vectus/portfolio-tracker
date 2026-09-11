@@ -40,6 +40,9 @@ class Sesion:
     def get(self, url: str, **kw):
         return self.client.get(url, headers=self.headers, **kw)
 
+    def patch(self, url: str, **kw):
+        return self.client.patch(url, headers=self.headers, **kw)
+
 
 @pytest.fixture
 def sesion(client: TestClient, usuario) -> Sesion:
@@ -901,3 +904,114 @@ def test_el_historial_tambien_rechaza_un_periodo_al_reves(sesion: Sesion) -> Non
         "&desde=2025-06-10&hasta=2025-06-01"
     )
     assert r.status_code == 422, r.text
+
+
+# --------------------------------------------- preferencias del usuario (F6)
+
+
+def test_sin_elegir_nada_la_preferencia_viene_nula_con_su_default(
+    sesion: Sesion,
+) -> None:
+    """`null` no es un error: significa "cada activo en su propia moneda".
+
+    Y no hereda del `DEFAULT_DISPLAY_CURRENCY` del `.env`: D55 dice que la
+    conversion a moneda dura se pide de forma explicita, asi que una
+    preferencia vacia no puede activarla por detras.
+    """
+    r = sesion.get("/api/settings")
+    assert r.status_code == 200, r.text
+    assert r.json()["display_currency"] is None
+
+
+def test_la_preferencia_se_guarda_y_sobrevive(sesion: Sesion) -> None:
+    r = sesion.patch("/api/settings", json={"display_currency": "USD"})
+    assert r.status_code == 200, r.text
+    assert r.json()["display_currency"] == "USD"
+
+    assert sesion.get("/api/settings").json()["display_currency"] == "USD"
+
+
+def test_null_borra_la_eleccion_y_vuelve_a_la_moneda_original(sesion: Sesion) -> None:
+    """Es la unica forma de deshacer. No existe un valor "ninguna"."""
+    assert (
+        sesion.patch("/api/settings", json={"display_currency": "USD"}).status_code
+        == 200
+    )
+    r = sesion.patch("/api/settings", json={"display_currency": None})
+    assert r.status_code == 200, r.text
+    assert r.json()["display_currency"] is None
+
+    assert sesion.get("/api/settings").json()["display_currency"] is None
+
+
+def test_una_moneda_que_el_sistema_no_sabe_mostrar_se_rechaza(sesion: Sesion) -> None:
+    """Aceptar cualquier codigo de tres letras dejaria pedir la cartera en
+    yenes y devolver numeros sin tipo de cambio detras."""
+    r = sesion.patch("/api/settings", json={"display_currency": "JPY"})
+    assert r.status_code == 422, r.text
+    assert "JPY" in r.text
+
+    # Y ARS tampoco: la conversion produce dolares y solo dolares.
+    assert (
+        sesion.patch("/api/settings", json={"display_currency": "ARS"}).status_code
+        == 422
+    )
+
+    # No se guardo nada a medias.
+    assert sesion.get("/api/settings").json()["display_currency"] is None
+
+
+def test_las_preferencias_no_se_comparten_entre_usuarios(
+    client: TestClient, usuario, admin
+) -> None:
+    """Cada uno ve la suya. El admin no es la excepcion.
+
+    Se limpian las cookies entre logins porque el `TestClient` es de alcance
+    `session` y un login nuevo pisa la cookie del CSRF del anterior.
+    """
+    propia = Sesion(client, *usuario)
+    assert (
+        propia.patch("/api/settings", json={"display_currency": "USD"}).status_code
+        == 200
+    )
+
+    client.cookies.clear()
+    otra = Sesion(client, *admin)
+    # El admin no hereda la preferencia de nadie: administra la plataforma, no
+    # las carteras ajenas.
+    assert otra.get("/api/settings").json()["display_currency"] is None
+
+    client.cookies.clear()
+    propia2 = Sesion(client, *usuario)
+    assert propia2.get("/api/settings").json()["display_currency"] == "USD"
+
+
+def test_cambiar_preferencias_exige_csrf(client: TestClient, usuario) -> None:
+    """Es una peticion que escribe: pasa por la misma puerta que las demas."""
+    s = Sesion(client, *usuario)
+    r = client.patch("/api/settings", json={"display_currency": "USD"})
+    assert r.status_code == 403, r.text
+    assert s.get("/api/settings").json()["display_currency"] is None
+
+
+def test_una_moneda_dura_que_no_existe_se_rechaza(sesion: Sesion) -> None:
+    """Antes devolvia importes en dolares rotulados con la moneda pedida.
+
+    La serie de FX es USD/ARS y la moneda de salida de la conversion esta
+    fija, asi que `hard_currency=JPY` producia numeros correctos bajo una
+    etiqueta falsa. Presentar un numero como algo que no es, que es
+    exactamente lo que este proyecto existe para no hacer.
+    """
+    portfolio = _alta_portfolio(sesion, f"Dura {secrets.token_hex(4)}")
+
+    r = sesion.get(
+        f"/api/positions?portfolio_id={portfolio['id']}&hard_currency=JPY"
+    )
+    assert r.status_code == 422, r.text
+    assert "JPY" in r.text
+
+    # USD sigue funcionando.
+    ok = sesion.get(
+        f"/api/positions?portfolio_id={portfolio['id']}&hard_currency=USD"
+    )
+    assert ok.status_code == 200, ok.text
