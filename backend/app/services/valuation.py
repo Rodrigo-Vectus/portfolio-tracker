@@ -35,6 +35,11 @@ from app.domain.fx import SerieFx, SinTipoDeCambio
 from app.models import Asset, CostLot, PositionCache
 from app.models.market import PriceQuote
 
+# Faltaba definirla y `valuar_en_moneda_dura` la usaba: cualquier consulta con
+# `hard_currency` moria en NameError antes de leer un solo lote. No lo detecto
+# ninguna prueba porque ninguna pedia la conversion a moneda dura.
+ZERO = Decimal(0)
+
 
 async def _cotizaciones_por_activo(
     session: AsyncSession, asset_ids: list[UUID]
