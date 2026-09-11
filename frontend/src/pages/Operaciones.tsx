@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { SelectorDeActivo } from "../components/SelectorDeActivo";
+import { FormularioDeOperacion } from "../components/FormularioDeOperacion";
 import {
   Button,
   EmptyState,
@@ -29,7 +29,6 @@ import {
 import { formatearCantidad, formatearFecha, formatearImporte } from "../lib/format";
 import {
   anularOperacion,
-  crearOperacion,
   fetchAccounts,
   fetchAssets,
   fetchPortfolios,
@@ -39,22 +38,7 @@ import {
   type Asset,
   type Portfolio,
   type Transaction,
-  type TxType,
 } from "../lib/finance";
-
-const TIPOS: { valor: TxType; etiqueta: string }[] = [
-  { valor: "BUY", etiqueta: "Compra" },
-  { valor: "SELL", etiqueta: "Venta" },
-];
-
-function hoyLocal(): string {
-  // Formato que espera <input type="datetime-local">. Se manda sin zona y el
-  // backend lo interpreta en la zona configurada, no en UTC: una compra de las
-  // 22:30 tiene que quedar en la rueda de hoy, no en la de mañana.
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
 
 export function Operaciones() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
@@ -69,18 +53,11 @@ export function Operaciones() {
   const [accountFiltro, setAccountFiltro] = useState("");
   const [error, setError] = useState("");
   const [abierto, setAbierto] = useState(false);
-  const [guardando, setGuardando] = useState(false);
-
-  const [tipo, setTipo] = useState<TxType>("BUY");
-  const [assetId, setAssetId] = useState("");
-  const [accountId, setAccountId] = useState("");
-  const [cantidad, setCantidad] = useState("");
-  const [precio, setPrecio] = useState("");
-  const [comision, setComision] = useState("0");
-  const [cuando, setCuando] = useState(hoyLocal);
 
   useEffect(() => {
     void (async () => {
+      // El formulario se trae los suyos. Estos son para la tabla: traducen el
+      // `asset_id` de cada operación a su símbolo, y para el filtro de cuenta.
       const [p, a, c] = await Promise.all([
         fetchPortfolios(),
         fetchAssets(),
@@ -90,14 +67,8 @@ export function Operaciones() {
         setPortfolios(p.data);
         if (p.data.length > 0) setElegido(p.data[0].id);
       }
-      if (a.ok) {
-        setActivos(a.data);
-        if (a.data.length > 0) setAssetId(a.data[0].id);
-      }
-      if (c.ok) {
-        setCuentas(c.data);
-        if (c.data.length > 0) setAccountId(c.data[0].id);
-      }
+      if (a.ok) setActivos(a.data);
+      if (c.ok) setCuentas(c.data);
     })();
   }, []);
 
@@ -130,39 +101,6 @@ export function Operaciones() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elegido, verAnuladas, desde, hasta, txType, accountFiltro]);
 
-  const activo = activos.find((a) => a.id === assetId);
-
-  async function registrar() {
-    setGuardando(true);
-    setError("");
-    const r = await crearOperacion({
-      portfolio_id: elegido,
-      asset_id: assetId,
-      // Sin cuenta la operación se registra igual: la columna es opcional. Lo
-      // que se pierde es poder distinguir después qué está en el broker y qué
-      // en un exchange, y eso no se puede reconstruir.
-      account_id: accountId || null,
-      tx_type: tipo,
-      quantity: cantidad,
-      unit_price: precio,
-      price_currency: activo?.currency ?? "ARS",
-      commission: comision || "0",
-      executed_at: cuando,
-    });
-    setGuardando(false);
-
-    if (!r.ok) {
-      // Un 422 acá no es un error del sistema: es el motor rechazando una
-      // operación que no cierra contra la tenencia. El mensaje dice cuál es el
-      // problema, porque "operación inválida" no sirve para corregir la carga.
-      setError(r.error);
-      return;
-    }
-    setCantidad("");
-    setPrecio("");
-    setAbierto(false);
-    void cargar(elegido, filtro);
-  }
 
   async function anular(id: string) {
     const motivo = window.prompt(
@@ -296,84 +234,18 @@ export function Operaciones() {
         )}
       </div>
 
-      {abierto && (
+      {abierto && elegido && (
         <div className="mb-8 max-w-3xl rounded-xl border border-ink-600 bg-ink-800 p-5">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Select
-              label="Tipo"
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value as TxType)}
-            >
-              {TIPOS.map((t) => (
-                <option key={t.valor} value={t.valor}>
-                  {t.etiqueta}
-                </option>
-              ))}
-            </Select>
-            <SelectorDeActivo
-              activos={activos}
-              valor={assetId}
-              onElegir={setAssetId}
-              onCreado={(a) => setActivos((prev) => [...prev, a])}
-            />
-            <Field
-              label="Cuándo"
-              type="datetime-local"
-              value={cuando}
-              onChange={(e) => setCuando(e.target.value)}
-            />
-            <Select
-              label="Cuenta"
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-              hint={
-                cuentas.length === 0
-                  ? "No tenés cuentas cargadas. Podés agregarlas en Cuentas."
-                  : "Dónde ocurrió la operación."
-              }
-            >
-              <option value="">Sin especificar</option>
-              {cuentas.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-            <Field
-              label="Cantidad"
-              inputMode="decimal"
-              value={cantidad}
-              onChange={(e) => setCantidad(e.target.value)}
-              placeholder="10"
-              hint="Siempre positiva. Comprar o vender se elige arriba."
-            />
-            <Field
-              label={`Precio unitario${activo ? ` (${activo.currency})` : ""}`}
-              inputMode="decimal"
-              value={precio}
-              onChange={(e) => setPrecio(e.target.value)}
-              placeholder="20960"
-            />
-            <Field
-              label="Comisión"
-              inputMode="decimal"
-              value={comision}
-              onChange={(e) => setComision(e.target.value)}
-              hint={
-                tipo === "BUY"
-                  ? "Suma al costo de la compra."
-                  : "Resta de lo que recibís."
-              }
-            />
-          </div>
-          <div className="mt-5">
-            <Button
-              onClick={() => void registrar()}
-              disabled={guardando || !cantidad || !precio || !assetId}
-            >
-              {guardando ? "Registrando…" : "Registrar operación"}
-            </Button>
-          </div>
+          {/* El mismo formulario que usa Cartera. Copiarlo daria dos que
+              validan distinto, y el dia que uno cambie el otro seguiria
+              andando mal en silencio. */}
+          <FormularioDeOperacion
+            portfolioId={elegido}
+            onRegistrada={() => {
+              setAbierto(false);
+              void cargar(elegido, filtro);
+            }}
+          />
         </div>
       )}
 

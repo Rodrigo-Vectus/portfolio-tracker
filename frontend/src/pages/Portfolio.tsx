@@ -270,7 +270,6 @@ export function Portfolio() {
             value={verEn ?? ""}
             disabled={verEn === null}
             onChange={(e) => cambiarMoneda(e.target.value)}
-            hint="Se recuerda para la próxima vez."
           >
             <option value="">Moneda original</option>
             <option value="USD">Dólares</option>

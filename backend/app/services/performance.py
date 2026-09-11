@@ -82,6 +82,32 @@ class RendimientoDeCartera:
             return None
         return self.realizado + self.no_realizado
 
+    @property
+    def open_cost_basis(self) -> Decimal:
+        """Costo de todo lo que sigue abierto."""
+        return sum((p.open_cost_basis for p in self.posiciones), ZERO)
+
+    @property
+    def roi(self) -> Decimal | None:
+        """Rendimiento de la cartera sobre el costo de lo abierto.
+
+        **El numerador es el no realizado, no el resultado total.** Sumarle lo
+        realizado daría una ganancia de posiciones ya cerradas dividida por el
+        costo de las que siguen abiertas: numerador y denominador dejarían de
+        corresponder, y el porcentaje se inflaría en cada venta. Es la fórmula
+        de la planilla, y no se repite.
+
+        `None` cuando falta alguna cotización o cuando no hay nada abierto: un
+        cero diría que la cartera no rindió, que es distinto de no poder
+        calcularlo.
+        """
+        if self.no_realizado is None:
+            return None
+        costo = self.open_cost_basis
+        if costo <= ZERO:
+            return None
+        return self.no_realizado / costo
+
 
 async def _flujos_externos(
     session: AsyncSession, user_id: UUID, portfolio_id: UUID, currency: str

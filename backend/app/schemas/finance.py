@@ -235,6 +235,19 @@ class PositionOut(DecimalOut):
     #: FRESCA | ESTIMADA | VIEJA | SIN_FECHA | AUSENTE
     price_status: str = "AUSENTE"
 
+    # --- variación contra el último cierre ---
+    #
+    # No se llama "24h" y ese es el punto. Sin calendario de feriados, un lunes
+    # compara contra el viernes y un lunes feriado contra el jueves. La única
+    # forma honesta de mostrarlo es transportar la fecha del cierre que se usó
+    # y que la pantalla la diga.
+    #
+    # `null` cuando no hay cierre previo. Un cero afirmaría que el precio no se
+    # movió, y eso es distinto de no tener contra qué compararlo.
+    variacion_diaria: Decimal | None = None
+    variacion_desde: date | None = None
+    cierre_anterior: Decimal | None = None
+
     # --- moneda dura (D2) ---
     #
     # El costo se convierte lote por lote al tipo de cambio de la fecha en que
@@ -379,6 +392,10 @@ class RendimientoOut(DecimalOut):
     resultado_total: Decimal | None
     valor_actual: Decimal | None
     aporte_neto: Decimal
+    #: No realizado sobre el costo de lo abierto. Nunca sobre compras menos
+    #: ventas: ese denominador se achica en cada venta y el porcentaje se
+    #: infla solo, que es lo que hacia la planilla.
+    roi: Decimal | None
     xirr_anual: Decimal | None
     xirr_motivo: str | None
     twr: TwrOut
@@ -413,3 +430,35 @@ class HistorialOut(BaseModel):
     #: Desde cuándo hay serie. Antes de esa fecha no hay datos y no se inventan.
     desde: date | None
     nota: str | None
+
+
+class PuntoDeCierre(DecimalOut):
+    """Un cierre diario. Lo minimo para dibujar una linea.
+
+    Hereda de DecimalOut: el precio sale como string y en notacion posicional,
+    igual que todo importe del sistema. Un cierre es dinero aunque solo se use
+    para dibujar.
+    """
+
+    trade_date: date
+    close: Decimal
+
+
+class SerieDeActivo(DecimalOut):
+    asset_id: UUID
+    symbol: str
+    currency: str
+    puntos: list[PuntoDeCierre]
+
+
+class SeriesDeCierresOut(DecimalOut):
+    """Cierres recientes de cada activo de la cartera.
+
+    **Las series no tienen todas el mismo largo y eso es correcto.** Un activo
+    que empezo a cotizar despues, o que tuvo un dia sin cierre, tiene menos
+    puntos. Rellenarlos para emparejarlas mostraria dias planos que nadie
+    midio.
+    """
+
+    desde: date
+    series: list[SerieDeActivo]

@@ -11,7 +11,7 @@ util, es un numero.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 
@@ -221,4 +221,45 @@ def totalizar(
         posiciones_sin_fecha=sin_fecha,
         posiciones_estimadas=estimadas,
         currency=currency,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class VariacionDiaria:
+    """Cuanto se movio un precio contra el ultimo cierre disponible.
+
+    **`desde` no es "ayer" sino la fecha del cierre que efectivamente se uso.**
+    Un lunes compara contra el viernes, y un lunes feriado contra el jueves. El
+    sistema no tiene calendario de feriados, asi que la unica forma honesta de
+    presentarlo es decir la fecha en vez de prometer 24 horas.
+    """
+
+    fraccion: Decimal
+    desde: date
+    cierre_anterior: Decimal
+
+
+def variacion_diaria(
+    precio_actual: Decimal | None,
+    cierre_anterior: Decimal | None,
+    fecha_del_cierre: date | None,
+) -> VariacionDiaria | None:
+    """Variacion contra el ultimo cierre, o `None` con todo lo que falte.
+
+    Devuelve `None` y no cero cuando falta cualquiera de las tres piezas. Un
+    cero afirmaria que el precio no se movio, y "no se movio" y "no se contra
+    que compararlo" son cosas distintas.
+
+    Tampoco se calcula con un cierre en cero: la division no existe y un
+    resultado inventado seria peor que la ausencia.
+    """
+    if precio_actual is None or cierre_anterior is None or fecha_del_cierre is None:
+        return None
+    if cierre_anterior <= 0:
+        return None
+
+    return VariacionDiaria(
+        fraccion=(precio_actual - cierre_anterior) / cierre_anterior,
+        desde=fecha_del_cierre,
+        cierre_anterior=cierre_anterior,
     )

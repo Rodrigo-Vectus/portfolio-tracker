@@ -8,6 +8,7 @@
  * titulares pesados en mayúsculas y datos en monoespaciada.
  */
 
+import { useEffect } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -57,6 +58,15 @@ export function Field({
   );
 }
 
+/**
+ * Selector con etiqueta.
+ *
+ * **`hint` no se usa dentro de una fila con `items-end`.** El texto vive
+ * adentro del `label`, así que alarga la caja por abajo y el navegador alinea
+ * el borde inferior del conjunto: el control queda más arriba que sus vecinos
+ * y la fila se ve torcida. Para una aclaración en una barra de filtros, va
+ * como párrafo debajo de toda la fila.
+ */
 export function Select({
   label,
   children,
@@ -218,9 +228,16 @@ export function Num({
  */
 export function Tabla({
   columnas,
+  encabezados,
   children,
 }: {
   columnas: { titulo: string; alineacion?: "izquierda" | "derecha" }[];
+  /**
+   * Contenido alternativo de cada encabezado, en el mismo orden que
+   * `columnas`. Un `null` deja el título de texto. Sirve para encabezados que
+   * ordenan sin que la tabla tenga que saber qué es ordenar.
+   */
+  encabezados?: (ReactNode | null)[];
   children: ReactNode;
 }) {
   return (
@@ -228,9 +245,9 @@ export function Tabla({
       <table className="w-full min-w-[40rem] border-collapse text-sm">
         <thead>
           <tr className="border-b border-ink-600">
-            {columnas.map((c) => (
+            {columnas.map((c, i) => (
               <th
-                key={c.titulo}
+                key={c.titulo || i}
                 scope="col"
                 className={`whitespace-nowrap px-4 py-3 text-micro font-medium
                             uppercase tracking-wider text-text-faint ${
@@ -239,7 +256,7 @@ export function Tabla({
                                 : "text-left"
                             }`}
               >
-                {c.titulo}
+                {encabezados?.[i] ?? c.titulo}
               </th>
             ))}
           </tr>
@@ -256,5 +273,61 @@ export function Nota({ children }: { children: ReactNode }) {
     <p className="max-w-prose border-l-2 border-ink-500 py-1 pl-4 text-sm text-text-muted">
       {children}
     </p>
+  );
+}
+
+/**
+ * Panel modal.
+ *
+ * Cierra con Escape y con un clic en el fondo. No atrapa el foco ni oculta el
+ * resto del árbol a un lector de pantalla: eso requiere trabajo que todavía no
+ * se hizo, y es mejor decirlo que suponerlo resuelto.
+ */
+export function Modal({
+  titulo,
+  onCerrar,
+  children,
+}: {
+  titulo: string;
+  onCerrar: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCerrar();
+    };
+    document.addEventListener("keydown", alTeclear);
+    return () => document.removeEventListener("keydown", alTeclear);
+  }, [onCerrar]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto
+                 bg-black/70 p-4 sm:p-8"
+      onClick={onCerrar}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={titulo}
+        // El clic de adentro no cierra: sin esto, elegir una opción de un
+        // select cuenta como clic en el fondo y el panel se cierra solo.
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-3xl rounded-xl border border-ink-600 bg-ink-800 p-6 shadow-2xl"
+      >
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <h2 className="display text-lg uppercase tracking-wide">{titulo}</h2>
+          <button
+            onClick={onCerrar}
+            aria-label="Cerrar"
+            className="rounded-full border border-ink-600 px-3 py-1 text-sm
+                       text-text-muted transition-colors hover:text-text"
+          >
+            Cerrar
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }

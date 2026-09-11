@@ -128,6 +128,20 @@ export interface Position {
   price_status: PriceStatus;
 
   /**
+   * Variación contra el último cierre disponible.
+   *
+   * No se llama "24h" a propósito: sin calendario de feriados, un lunes
+   * compara contra el viernes y un lunes feriado contra el jueves. Por eso
+   * viaja `variacion_desde` con la fecha del cierre que se usó.
+   *
+   * `null` cuando no hay cierre previo. No es cero: un cero diría que el
+   * precio no se movió, y eso es distinto de no tener contra qué compararlo.
+   */
+  variacion_diaria: string | null;
+  variacion_desde: string | null;
+  cierre_anterior: string | null;
+
+  /**
    * Costo y valor en moneda dura, cuando se piden.
    *
    * El costo se convierte lote por lote al tipo de cambio de la fecha de cada
@@ -343,6 +357,14 @@ export interface Rendimiento {
   resultado_total: string | null;
   valor_actual: string | null;
   aporte_neto: string;
+  /**
+   * No realizado sobre el costo de lo abierto. Fracción, no porcentaje.
+   *
+   * El numerador es el no realizado y no el resultado total: sumarle lo
+   * realizado dividiría una ganancia ya cerrada por el costo de lo que sigue
+   * abierto, y ese porcentaje se infla en cada venta.
+   */
+  roi: string | null;
   xirr_anual: string | null;
   xirr_motivo: string | null;
   twr: Twr;
@@ -400,6 +422,35 @@ export const fetchPreferencias = () => api.get<Preferencias>("/settings");
 /** `null` borra la elección y vuelve al default del sistema. */
 export const guardarPreferencias = (displayCurrency: string | null) =>
   api.patch<Preferencias>("/settings", { display_currency: displayCurrency }, true);
+
+export interface PuntoDeCierre {
+  trade_date: string;
+  /** String, como todo importe. */
+  close: string;
+}
+
+export interface SerieDeActivo {
+  asset_id: string;
+  symbol: string;
+  currency: string;
+  puntos: PuntoDeCierre[];
+}
+
+export interface SeriesDeCierres {
+  desde: string;
+  series: SerieDeActivo[];
+}
+
+/**
+ * Cierres recientes de cada activo, para la tendencia de cada fila.
+ *
+ * Las series no vienen todas del mismo largo: un activo con un día sin cierre
+ * tiene un punto menos y no se rellena.
+ */
+export const fetchSeriesDeCierres = (portfolioId: string, dias = 30) =>
+  api.get<SeriesDeCierres>(
+    `/price-history?portfolio_id=${portfolioId}&dias=${dias}`,
+  );
 
 export const fetchRendimiento = (portfolioId: string, currency = "ARS") =>
   api.get<Rendimiento>(

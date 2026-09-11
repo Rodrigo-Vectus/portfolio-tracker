@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.market import (
+    VariacionDiaria,
     Cotizacion,
     Frescura,
     TotalDeCartera,
@@ -32,8 +33,9 @@ from app.domain.market import (
     totalizar,
 )
 from app.domain.fx import SerieFx, SinTipoDeCambio
+from app.domain.market import variacion_diaria
 from app.models import Asset, AssetType, CostLot, PositionCache
-from app.models.market import PriceQuote
+from app.models.market import PriceBarDaily, PriceQuote
 
 # Faltaba definirla y `valuar_en_moneda_dura` la usaba: cualquier consulta con
 # `hard_currency` moria en NameError antes de leer un solo lote. No lo detecto
@@ -269,3 +271,96 @@ async def valuar_en_moneda_dura(
         no_realizado=valor - costo,
         currency=currency,
     )
+
+
+async def cierres_anteriores(
+    session: AsyncSession,
+    *,
+    asset_ids: list[UUID],
+    antes_de: date,
+) -> dict[UUID, tuple[Decimal, date]]:
+    """Ultimo cierre de cada activo **anterior** a la fecha dada.
+
+    `antes_de` es estrictamente exclusivo y suele ser hoy. Si se incluyera el
+    cierre de hoy, la variacion se calcularia contra el mismo precio que se
+    esta mostrando y daria cero todos los dias despues de las 18:10.
+
+    No se rellena lo que falta. Un activo sin cierre previo queda afuera del
+    diccionario y su variacion terminara en `null`: la serie de cierres arranca
+    con el primer dia de historial y no se puede reconstruir hacia atras.
+    """
+    if not asset_ids:
+        return {}
+
+    # Una fila por activo: la del cierre mas reciente anterior a la fecha.
+    # DISTINCT ON es de PostgreSQL y evita traer la serie entera para quedarse
+    # con el ultimo de cada una.
+    consulta = (
+        select(PriceBarDaily.asset_id, PriceBarDaily.close, PriceBarDaily.trade_date)
+        .where(
+            PriceBarDaily.asset_id.in_(asset_ids),
+            PriceBarDaily.trade_date < antes_de,
+        )
+        .distinct(PriceBarDaily.asset_id)
+        .order_by(PriceBarDaily.asset_id, PriceBarDaily.trade_date.desc())
+    )
+
+    resultado = await session.execute(consulta)
+    return {fila.asset_id: (fila.close, fila.trade_date) for fila in resultado}
+
+
+def variacion_de(
+    valor: ValorDePosicion,
+    cierre: tuple[Decimal, date] | None,
+) -> VariacionDiaria | None:
+    """Variacion de una posicion contra su ultimo cierre.
+
+    Existe como funcion y no como tres lineas adentro del endpoint porque ahi
+    no se podia probar sin base, y el atributo del precio quedaba escrito a
+    mano: `cotizacion.precio` en vez de `cotizacion.price` compilaba, pasaba el
+    linter, pasaba las pruebas —ninguna tenia cotizacion **y** cierre a la
+    vez— y devolvia 500 en la primera pantalla real.
+    """
+    if cierre is None:
+        return None
+    cotizacion = valor.cotizacion
+    return variacion_diaria(
+        cotizacion.price if cotizacion is not None else None,
+        cierre[0],
+        cierre[1],
+    )
+
+
+async def series_de_cierres(
+    session: AsyncSession,
+    *,
+    asset_ids: list[UUID],
+    desde: date,
+) -> dict[UUID, list[tuple[date, Decimal]]]:
+    """Cierres diarios de cada activo desde una fecha, del mas viejo al mas nuevo.
+
+    Se pide una sola vez para todos los activos y se agrupa en memoria. Una
+    consulta por activo convierte una cartera de veinte papeles en veinte
+    viajes a la base.
+
+    **No se rellenan los dias sin cierre.** Si un dia falta, falta: la serie
+    tiene menos puntos y el dibujo lo refleja. Repetir el cierre anterior para
+    emparejar las series haria que un dia sin operar se vea como un dia plano,
+    y eso es una afirmacion sobre el mercado que nadie hizo.
+    """
+    if not asset_ids:
+        return {}
+
+    resultado = await session.execute(
+        select(PriceBarDaily.asset_id, PriceBarDaily.trade_date, PriceBarDaily.close)
+        .where(
+            PriceBarDaily.asset_id.in_(asset_ids),
+            PriceBarDaily.trade_date >= desde,
+        )
+        .order_by(PriceBarDaily.asset_id, PriceBarDaily.trade_date)
+    )
+
+    series: dict[UUID, list[tuple[date, Decimal]]] = {}
+    for fila in resultado:
+        series.setdefault(fila.asset_id, []).append((fila.trade_date, fila.close))
+    return series

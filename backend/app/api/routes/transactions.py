@@ -12,7 +12,7 @@ deja de serlo, la salida es mover el recalculo al worker **y marcar el dato
 con su `as_of`**, no dejarlo en silencio.
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
@@ -45,9 +45,18 @@ from app.schemas.finance import (
     RoiOut,
     HistorialOut,
     PuntoOut,
+    PuntoDeCierre,
+    SerieDeActivo,
+    SeriesDeCierresOut,
 )
 from app.services import transactions as tx_service
-from app.services.valuation import resultado_no_realizado, valuar_portfolio
+from app.services.valuation import (
+    cierres_anteriores,
+    series_de_cierres,
+    resultado_no_realizado,
+    valuar_portfolio,
+    variacion_de,
+)
 from app.services.cash import saldo_de_portfolio
 from app.services.fx import cargar_serie
 from app.services.valuation import valuar_en_moneda_dura
@@ -383,14 +392,27 @@ async def list_positions(
         serie = await cargar_serie(session)
 
     hoy = datetime.now(UTC).date()
+
+    # Cierres anteriores a hoy, para la variacion. Se piden en una sola
+    # consulta y no uno por posicion: una consulta por fila es como una lista
+    # de veinte activos se vuelve veinte viajes a la base.
+    cierres = await cierres_anteriores(
+        session, asset_ids=[pos.asset_id for pos, _, _ in valuadas], antes_de=hoy
+    )
+
     posiciones = []
     for pos, asset, valor in valuadas:
         cotizacion = valor.cotizacion
         monto = valor.valor
         es_estimada = cotizacion is not None and cotizacion.quoted_at is None
 
+        variacion = variacion_de(valor, cierres.get(pos.asset_id))
+
         posiciones.append(
             PositionOut(
+                variacion_diaria=variacion.fraccion if variacion else None,
+                variacion_desde=variacion.desde if variacion else None,
+                cierre_anterior=variacion.cierre_anterior if variacion else None,
                 asset_id=pos.asset_id,
                 symbol=asset.symbol,
                 asset_type=asset.asset_type,
@@ -563,6 +585,7 @@ async def get_rendimiento(
         resultado_total=r.resultado_total,
         valor_actual=r.valor_actual,
         aporte_neto=r.aporte_neto,
+        roi=r.roi,
         xirr_anual=r.xirr_anual,
         xirr_motivo=r.xirr_motivo,
         twr=TwrOut.model_validate(r.twr, from_attributes=True),
@@ -570,6 +593,60 @@ async def get_rendimiento(
 
 
 # ----------------------------------------------------------------- historial
+
+
+@router.get(
+    "/price-history",
+    response_model=SeriesDeCierresOut,
+    summary="Cierres recientes de cada activo",
+)
+async def get_price_history(
+    portfolio_id: UUID,
+    user: ActiveUser,
+    session: Session,
+    dias: int = 30,
+) -> SeriesDeCierresOut:
+    """Serie corta de cierres por activo, para dibujar la tendencia de cada fila.
+
+    **Las series no vienen todas del mismo largo.** Un activo con un dia sin
+    cierre tiene un punto menos, y no se rellena: repetir el cierre anterior
+    haria que un dia sin operar se vea como un dia plano, que es una
+    afirmacion sobre el mercado que nadie hizo.
+
+    Sin cierres todavia, la lista viene vacia. No es un error: la serie arranca
+    con el primer cierre diario y no se puede reconstruir hacia atras.
+    """
+    await _portfolio_propio(session, user.id, portfolio_id)
+
+    if not 1 <= dias <= 365:
+        raise HTTPException(
+            status_code=422,
+            detail="El periodo debe estar entre 1 y 365 dias.",
+        )
+
+    valuadas, _ = await valuar_portfolio(
+        session, user_id=user.id, portfolio_id=portfolio_id
+    )
+    desde = datetime.now(UTC).date() - timedelta(days=dias)
+    series = await series_de_cierres(
+        session, asset_ids=[pos.asset_id for pos, _, _ in valuadas], desde=desde
+    )
+
+    return SeriesDeCierresOut(
+        desde=desde,
+        series=[
+            SerieDeActivo(
+                asset_id=pos.asset_id,
+                symbol=asset.symbol,
+                currency=asset.currency,
+                puntos=[
+                    PuntoDeCierre(trade_date=f, close=c)
+                    for f, c in series.get(pos.asset_id, [])
+                ],
+            )
+            for pos, asset, _ in valuadas
+        ],
+    )
 
 
 @router.get(

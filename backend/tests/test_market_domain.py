@@ -7,7 +7,7 @@ una intención escrita en un documento.
 Python puro. Sin red, sin base.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from app.domain.market import (
@@ -15,6 +15,7 @@ from app.domain.market import (
     Frescura,
     ValorDePosicion,
     totalizar,
+    variacion_diaria,
 )
 
 AHORA = datetime(2026, 9, 4, 20, 0, tzinfo=UTC)
@@ -194,3 +195,47 @@ def test_una_cartera_vacia_no_finge_un_total_en_cero() -> None:
     t = totalizar([], "ARS", AHORA)
     assert t.total is None
     assert t.posiciones_totales == 0
+
+
+# ------------------------------------------------------ variacion diaria (F10)
+
+
+def test_la_variacion_se_calcula_contra_el_cierre_informado() -> None:
+    v = variacion_diaria(Decimal("110"), Decimal("100"), date(2026, 9, 10))
+    assert v is not None
+    assert v.fraccion == Decimal("0.1")
+    assert v.desde == date(2026, 9, 10)
+
+
+def test_una_baja_da_negativo() -> None:
+    v = variacion_diaria(Decimal("90"), Decimal("100"), date(2026, 9, 10))
+    assert v is not None
+    assert v.fraccion == Decimal("-0.1")
+
+
+def test_sin_cierre_anterior_no_hay_variacion_y_tampoco_cero() -> None:
+    """Cero afirmaria que el precio no se movio.
+
+    "No se movio" y "no se contra que compararlo" son afirmaciones distintas, y
+    un cero en una columna de variacion se lee como la primera.
+    """
+    assert variacion_diaria(Decimal("110"), None, date(2026, 9, 10)) is None
+    assert variacion_diaria(None, Decimal("100"), date(2026, 9, 10)) is None
+    assert variacion_diaria(Decimal("110"), Decimal("100"), None) is None
+
+
+def test_un_cierre_en_cero_no_produce_un_porcentaje() -> None:
+    """La division no existe, y un numero inventado es peor que la ausencia."""
+    assert variacion_diaria(Decimal("110"), Decimal("0"), date(2026, 9, 10)) is None
+
+
+def test_la_fecha_del_cierre_viaja_con_el_numero() -> None:
+    """Sin calendario de feriados, un lunes feriado compara contra el jueves.
+
+    Llamar a eso "24 horas" seria mentir, asi que se transporta la fecha del
+    cierre que se uso y la pantalla la muestra.
+    """
+    v = variacion_diaria(Decimal("110"), Decimal("100"), date(2026, 9, 4))
+    assert v is not None
+    assert v.desde == date(2026, 9, 4)
+    assert v.cierre_anterior == Decimal("100")

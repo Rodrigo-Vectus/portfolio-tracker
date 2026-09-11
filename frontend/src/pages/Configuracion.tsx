@@ -54,6 +54,29 @@ export function Configuracion() {
       </section>
 
       <section className="mb-10">
+        <h2 className="mb-3 text-sm font-medium text-text-muted">Catálogo</h2>
+        <p className="mb-3 max-w-prose text-sm text-text-muted">
+          Los activos y las cuentas se crean solos cuando cargás una operación.
+          Estas pantallas son para corregir lo que ya existe: el sector, el
+          factor de precio de un bono o desactivar algo que dejaste de operar.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <Link
+            to="/activos"
+            className="text-sm text-brand underline-offset-4 hover:underline"
+          >
+            Activos
+          </Link>
+          <Link
+            to="/cuentas"
+            className="text-sm text-brand underline-offset-4 hover:underline"
+          >
+            Cuentas
+          </Link>
+        </div>
+      </section>
+
+      <section className="mb-10">
         <h2 className="mb-3 text-sm font-medium text-text-muted">Valores del sistema</h2>
         {meta ? (
           <dl className="max-w-md space-y-2 text-sm">

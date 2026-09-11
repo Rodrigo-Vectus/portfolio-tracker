@@ -13,17 +13,11 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import {
-  IconActivos,
   IconAdmin,
-  IconCaja,
   IconConfiguracion,
-  IconCuentas,
-  IconDashboard,
   IconEstado,
-  IconHistorial,
   IconOperaciones,
   IconPortfolio,
-  IconRendimiento,
   IconSalir,
 } from "../components/icons";
 
@@ -46,56 +40,15 @@ const SECCIONES: Seccion[] = [
     items: [
       {
         to: "/",
-        label: "Dashboard",
-        detalle: "Resumen de tu cartera",
-        icono: IconDashboard,
-      },
-      {
-        to: "/portfolio",
-        label: "Portfolio",
-        detalle: "Posiciones y valuación",
+        label: "Cartera",
+        detalle: "Posiciones, resultado y evolución",
         icono: IconPortfolio,
       },
       {
         to: "/operaciones",
         label: "Operaciones",
-        detalle: "Compras y ventas",
+        detalle: "Compras, ventas y movimientos",
         icono: IconOperaciones,
-      },
-      {
-        to: "/caja",
-        label: "Caja",
-        detalle: "Depósitos y disponible",
-        icono: IconCaja,
-      },
-      {
-        to: "/rendimiento",
-        label: "Rendimiento",
-        detalle: "ROI y tasa anual",
-        icono: IconRendimiento,
-      },
-    ],
-  },
-  {
-    titulo: "Catálogo",
-    items: [
-      {
-        to: "/activos",
-        label: "Activos",
-        detalle: "CEDEARs, bonos y cripto",
-        icono: IconActivos,
-      },
-      {
-        to: "/cuentas",
-        label: "Cuentas",
-        detalle: "Brokers y exchanges",
-        icono: IconCuentas,
-      },
-      {
-        to: "/historial",
-        label: "Historial",
-        detalle: "Evolución de la cartera",
-        icono: IconHistorial,
       },
     ],
   },

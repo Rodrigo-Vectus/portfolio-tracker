@@ -1015,3 +1015,57 @@ def test_una_moneda_dura_que_no_existe_se_rechaza(sesion: Sesion) -> None:
         f"/api/positions?portfolio_id={portfolio['id']}&hard_currency=USD"
     )
     assert ok.status_code == 200, ok.text
+
+
+def test_sin_cierre_anterior_la_variacion_viene_nula(sesion: Sesion) -> None:
+    """Una cartera recien creada no tiene contra que comparar.
+
+    El campo viene en `null` y no en cero. Un cero en una columna de variacion
+    se lee como "el precio no se movio", que es una afirmacion distinta de "no
+    hay cierre anterior".
+    """
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion, f"Var {secrets.token_hex(4)}")
+    assert _operacion(sesion, portfolio, activo, "BUY", 1, 100, 1).status_code == 201
+
+    posiciones = _posiciones(sesion, portfolio)
+    assert len(posiciones) == 1
+    assert posiciones[0]["variacion_diaria"] is None
+    assert posiciones[0]["variacion_desde"] is None
+
+
+def test_las_series_de_cierres_vienen_vacias_sin_historial(sesion: Sesion) -> None:
+    """Una cartera nueva no tiene cierres, y eso no es un error.
+
+    La serie arranca con el primer cierre diario y no se puede reconstruir
+    hacia atras: la lista viene vacia y el sparkline no dibuja nada.
+    """
+    activo = _alta_activo(sesion)
+    portfolio = _alta_portfolio(sesion, f"Serie {secrets.token_hex(4)}")
+    assert _operacion(sesion, portfolio, activo, "BUY", 1, 100, 1).status_code == 201
+
+    r = sesion.get(f"/api/price-history?portfolio_id={portfolio['id']}")
+    assert r.status_code == 200, r.text
+    datos = r.json()
+    assert len(datos["series"]) == 1
+    assert datos["series"][0]["symbol"] == activo["symbol"]
+    assert datos["series"][0]["puntos"] == []
+
+
+def test_un_periodo_absurdo_de_cierres_se_rechaza(sesion: Sesion) -> None:
+    portfolio = _alta_portfolio(sesion, f"SerieMal {secrets.token_hex(4)}")
+    for dias in (0, 999):
+        r = sesion.get(
+            f"/api/price-history?portfolio_id={portfolio['id']}&dias={dias}"
+        )
+        assert r.status_code == 422, r.text
+
+
+def test_las_series_no_cruzan_carteras(client: TestClient, usuario, admin) -> None:
+    propia = Sesion(client, *usuario)
+    portfolio = _alta_portfolio(propia, f"SerieAjena {secrets.token_hex(4)}")
+
+    client.cookies.clear()
+    ajena = Sesion(client, *admin)
+    r = ajena.get(f"/api/price-history?portfolio_id={portfolio['id']}")
+    assert r.status_code == 404, r.text

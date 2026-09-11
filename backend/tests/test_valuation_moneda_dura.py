@@ -162,3 +162,58 @@ async def test_sin_tipo_de_cambio_anterior_no_se_inventa_uno(lotes) -> None:
 
     assert r.costo is None
     assert r.motivo is not None
+
+
+# ------------------------------------------- variacion contra el cierre previo
+
+
+def _valor(precio: str | None):
+    """Una posicion valuada, con o sin cotizacion."""
+    from app.domain.market import Cotizacion, Frescura, ValorDePosicion
+
+    cotizacion = (
+        Cotizacion(
+            symbol="AAPL",
+            price=Decimal(precio),
+            currency="ARS",
+            source="test",
+            fetched_at=datetime(2026, 9, 11, 12, 0, tzinfo=UTC),
+        )
+        if precio is not None
+        else None
+    )
+    return ValorDePosicion(
+        symbol="AAPL",
+        quantity=Decimal(1),
+        cotizacion=cotizacion,
+        frescura=Frescura.FRESCA if cotizacion else Frescura.AUSENTE,
+    )
+
+
+def test_la_variacion_lee_el_precio_de_la_cotizacion() -> None:
+    """La regresion: el atributo se llamaba `price`, no `precio`.
+
+    `cotizacion.precio` compilaba, pasaba el linter y pasaba las pruebas
+    —ninguna tenia cotizacion **y** cierre a la vez— y devolvia 500 en la
+    primera pantalla real. Esta prueba tiene las dos cosas.
+    """
+    v = valuation.variacion_de(
+        _valor("26600"), (Decimal("25980"), date(2026, 9, 10))
+    )
+    assert v is not None
+    assert v.desde == date(2026, 9, 10)
+    assert v.cierre_anterior == Decimal("25980")
+    # (26600 - 25980) / 25980
+    assert v.fraccion > 0
+
+
+def test_sin_cierre_previo_no_hay_variacion() -> None:
+    assert valuation.variacion_de(_valor("26600"), None) is None
+
+
+def test_sin_cotizacion_no_hay_variacion_aunque_haya_cierre() -> None:
+    """Falta una de las dos puntas: no se inventa la que falta."""
+    assert (
+        valuation.variacion_de(_valor(None), (Decimal("25980"), date(2026, 9, 10)))
+        is None
+    )
