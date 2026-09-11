@@ -16,6 +16,7 @@ import {
   Nota,
   Num,
   PageHeading,
+  Pill,
   Select,
   Tabla,
 } from "../components/ui";
@@ -29,6 +30,7 @@ import {
   fetchRendimiento,
   type Portfolio,
   type Rendimiento as RendimientoT,
+  type Twr as TwrT,
 } from "../lib/finance";
 
 function tono(valor: string | null) {
@@ -60,6 +62,76 @@ function Cifra({
         )}
       </p>
       <p className="mt-2 max-w-prose text-micro text-text-faint">{detalle}</p>
+    </div>
+  );
+}
+
+/**
+ * Tarjeta del TWR.
+ *
+ * No alcanza con el porcentaje: el TWR de una serie corta es un número
+ * técnicamente correcto y prácticamente vacío. Por eso la tarjeta muestra
+ * siempre sobre qué tramo se calculó, y cuando la serie se cortó o la caja
+ * está en rojo, lo dice en ámbar. Verde y rojo quedan para el signo.
+ */
+function TarjetaTwr({ twr }: { twr: TwrT }) {
+  const hay = twr.acumulado !== null;
+
+  return (
+    <div className="rounded-xl border border-ink-600 bg-ink-800 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-text-muted">Rendimiento de la cartera (TWR)</p>
+        {(twr.corte || twr.advertencia) && <Pill tono="aviso">Leer la nota</Pill>}
+      </div>
+
+      <p className="mt-1 text-xl">
+        {hay ? (
+          <Num tono={tono(twr.acumulado)}>
+            {formatearPorcentaje(twr.acumulado as string)}
+          </Num>
+        ) : (
+          <Num tono="tenue">—</Num>
+        )}
+      </p>
+
+      {hay && (
+        <p className="mt-1 text-sm text-text-muted">
+          {twr.anualizado !== null ? (
+            <>
+              <Num tono={tono(twr.anualizado)}>
+                {formatearPorcentaje(twr.anualizado)}
+              </Num>{" "}
+              anualizado
+            </>
+          ) : (
+            "Acumulado del período. Todavía no se anualiza."
+          )}
+        </p>
+      )}
+
+      <p className="mt-2 max-w-prose text-micro text-text-faint">
+        {hay
+          ? `Del ${twr.desde} al ${twr.hasta}: ${twr.dias} día(s), ` +
+            `${twr.subperiodos} tramo(s) encadenados. Neutraliza tus aportes, ` +
+            `así que mide la cartera y no el momento en que pusiste la plata.`
+          : (twr.motivo ?? "")}
+      </p>
+
+      {hay && twr.motivo && (
+        <p className="mt-2 max-w-prose text-micro text-text-faint">{twr.motivo}</p>
+      )}
+
+      {twr.advertencia && (
+        <p className="mt-3 max-w-prose border-l-2 border-stale/50 pl-3 text-micro text-stale">
+          {twr.advertencia}
+        </p>
+      )}
+
+      {twr.corte && (
+        <p className="mt-3 max-w-prose border-l-2 border-stale/50 pl-3 text-micro text-stale">
+          {twr.corte}
+        </p>
+      )}
     </div>
   );
 }
@@ -138,17 +210,25 @@ export function Rendimiento() {
         <p className="text-text-muted">Calculando…</p>
       ) : (
         <>
-          <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Las dos tasas van juntas y arriba porque responden preguntas
+              distintas sobre lo mismo: el TWR mide la cartera, el XIRR mide tu
+              plata. Separarlas invitaría a leer una como corrección de la
+              otra. */}
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <TarjetaTwr twr={datos.twr} />
             <Cifra
-              etiqueta="Tasa anual (XIRR)"
+              etiqueta="Rendimiento de tu plata (XIRR)"
               valor={datos.xirr_anual}
               porcentaje
               detalle={
                 datos.xirr_anual !== null
-                  ? "Tasa que iguala lo que pusiste con lo que tenés hoy, considerando las fechas."
+                  ? "Tasa anual que iguala lo que pusiste con lo que tenés hoy, considerando las fechas. A diferencia del TWR, acertar el momento del aporte la mejora."
                   : (datos.xirr_motivo ?? "")
               }
             />
+          </div>
+
+          <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Cifra
               etiqueta="Resultado total"
               valor={datos.resultado_total}
@@ -227,10 +307,17 @@ export function Rendimiento() {
               cosas distintas, y un porcentaje simple las muestra iguales.
             </Nota>
             <Nota>
-              Falta el TWR, que mide el rendimiento aislando el efecto de tus
-              aportes. Necesita el valor de la cartera en cada fecha de
-              movimiento, y por ahora sólo se guarda la última cotización de
-              cada activo. Llega con los snapshots diarios.
+              El TWR mide lo contrario: cuánto rindió la cartera, sin importar
+              cuándo pusiste la plata. Encadena el rendimiento de cada día y en
+              cada tramo descuenta lo que entró o salió, así que un depósito no
+              se lee como ganancia. Es la métrica con la que se comparan los
+              fondos entre sí.
+            </Nota>
+            <Nota>
+              El TWR se calcula sobre los snapshots diarios, que arrancan el día
+              del primer cierre y no se pueden reconstruir hacia atrás. Un día
+              sin valuar corta la serie en vez de saltearse: encadenar por
+              encima de un hueco afirmaría que entre sus puntas no pasó nada.
             </Nota>
           </div>
         </>

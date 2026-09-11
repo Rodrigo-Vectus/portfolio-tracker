@@ -287,6 +287,29 @@ export interface Roi {
  * `xirr_anual` viene en `null` con `xirr_motivo` explicando por qué, en vez de
  * un cero que se leería como "no rindió nada".
  */
+/**
+ * Rendimiento de la cartera aislando el efecto de los aportes.
+ *
+ * Nunca viene un número pelado: `desde`, `hasta` y `subperiodos` dicen sobre
+ * qué tramo se calculó. `corte` avisa que la serie se partió por un día sin
+ * valuar, y `advertencia` que el número es correcto pero se lee mal.
+ *
+ * `anualizado` queda en `null` mientras la serie sea corta: elevar unos pocos
+ * días a 365/n produce tasas de miles por ciento que no describen ningún año.
+ */
+export interface Twr {
+  /** Fracción, no porcentaje: "0.25" es 25%. */
+  acumulado: string | null;
+  anualizado: string | null;
+  desde: string | null;
+  hasta: string | null;
+  dias: number;
+  subperiodos: number;
+  motivo: string | null;
+  corte: string | null;
+  advertencia: string | null;
+}
+
 export interface Rendimiento {
   currency: string;
   posiciones: Roi[];
@@ -297,6 +320,7 @@ export interface Rendimiento {
   aporte_neto: string;
   xirr_anual: string | null;
   xirr_motivo: string | null;
+  twr: Twr;
 }
 
 /**

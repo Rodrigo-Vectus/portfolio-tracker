@@ -336,6 +336,30 @@ class RoiOut(DecimalOut):
     roi: Decimal | None
 
 
+class TwrOut(DecimalOut):
+    """Rendimiento de la cartera aislando el efecto de los aportes.
+
+    Nunca sale un número pelado: `desde`, `hasta` y `subperiodos` dicen sobre
+    qué tramo se calculó, y `corte` avisa cuando la serie se partió por un día
+    sin valuar.
+
+    `anualizado` viene en `None` mientras la serie sea corta. Elevar unos pocos
+    días a 365/n produce tasas de miles por ciento que no describen ningún año.
+    """
+
+    #: Fracción, no porcentaje: 0.25 es 25%.
+    acumulado: Decimal | None
+    anualizado: Decimal | None
+    desde: date | None
+    hasta: date | None
+    dias: int
+    subperiodos: int
+    motivo: str | None
+    corte: str | None
+    #: El número es correcto pero se lee mal. No lo invalida: lo enmarca.
+    advertencia: str | None
+
+
 class RendimientoOut(DecimalOut):
     """Rendimiento de la cartera.
 
@@ -357,6 +381,7 @@ class RendimientoOut(DecimalOut):
     aporte_neto: Decimal
     xirr_anual: Decimal | None
     xirr_motivo: str | None
+    twr: TwrOut
 
 
 class PuntoOut(DecimalOut):

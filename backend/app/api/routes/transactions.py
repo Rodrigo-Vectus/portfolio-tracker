@@ -35,6 +35,7 @@ from app.schemas.finance import (
     TransactionVoidIn,
     SaldoOut,
     RendimientoOut,
+    TwrOut,
     RoiOut,
     HistorialOut,
     PuntoOut,
@@ -433,12 +434,12 @@ async def get_rendimiento(
     session: Session,
     currency: str = "ARS",
 ) -> RendimientoOut:
-    """ROI por posición y XIRR de la cartera.
+    """ROI por posición, XIRR y TWR de la cartera.
 
-    **El TWR no está**, y no es un olvido: necesita el valor de la cartera en
-    cada fecha de flujo, y hoy sólo existe el último precio. Calcularlo con lo
-    que hay daría un número que parece un rendimiento sin serlo. Llega cuando
-    existan los snapshots diarios.
+    **El XIRR y el TWR no miden lo mismo y por eso están los dos.** El XIRR
+    responde cuánto rindió tu plata, así que le importa cuándo la pusiste. El
+    TWR responde cuánto rindió la cartera, neutralizando los aportes: es la
+    métrica con la que se comparan los fondos entre sí.
 
     El ROI de cada posición se calcula sobre el costo de lo que sigue abierto,
     no sobre el capital neto aportado: ese denominador se achica al vender e
@@ -458,6 +459,7 @@ async def get_rendimiento(
         aporte_neto=r.aporte_neto,
         xirr_anual=r.xirr_anual,
         xirr_motivo=r.xirr_motivo,
+        twr=TwrOut.model_validate(r.twr, from_attributes=True),
     )
 
 

@@ -24,12 +24,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.performance import (
     Flujo,
+    PuntoDeTwr,
+    ResultadoTwr,
     RoiDePosicion,
     XirrNoConverge,
     roi_de_posicion,
+    twr,
     xirr,
 )
-from app.models import Transaction, TransactionStatus, TransactionType
+from app.models import (
+    PortfolioSnapshot,
+    Transaction,
+    TransactionStatus,
+    TransactionType,
+)
 from app.services.valuation import valuar_portfolio
 
 ZERO = Decimal(0)
@@ -55,6 +63,7 @@ class RendimientoDeCartera:
         currency: str,
         xirr_anual: Decimal | None,
         xirr_motivo: str | None,
+        twr: ResultadoTwr,
     ) -> None:
         self.posiciones = posiciones
         self.realizado = realizado
@@ -64,6 +73,7 @@ class RendimientoDeCartera:
         self.currency = currency
         self.xirr_anual = xirr_anual
         self.xirr_motivo = xirr_motivo
+        self.twr = twr
 
     @property
     def resultado_total(self) -> Decimal | None:
@@ -91,6 +101,69 @@ async def _flujos_externos(
         (fila.trade_date, Decimal(FLUJOS_EXTERNOS[fila.tx_type]) * fila.unit_price)
         for fila in resultado.scalars().all()
     ]
+
+
+async def _puntos_de_twr(
+    session: AsyncSession,
+    user_id: UUID,
+    portfolio_id: UUID,
+    externos: list[tuple[date, Decimal]],
+) -> list[PuntoDeTwr]:
+    """Convierte snapshots y flujos en la serie que encadena el TWR.
+
+    **El patrimonio es posiciones más caja.** `total_value` guarda sólo las
+    posiciones; los depósitos entran a la caja. Medir el rendimiento contra un
+    denominador que excluye la caja haría que un depósito sin invertir
+    aparezca como flujo sin contrapartida.
+
+    Cada flujo se imputa al primer snapshot **en o después** de su fecha: es el
+    tramo durante el cual la plata estuvo adentro.
+    """
+    resultado = await session.execute(
+        select(PortfolioSnapshot)
+        .where(
+            PortfolioSnapshot.portfolio_id == portfolio_id,
+            PortfolioSnapshot.user_id == user_id,
+        )
+        .order_by(PortfolioSnapshot.snapshot_date)
+    )
+    filas = list(resultado.scalars().all())
+    if not filas:
+        return []
+
+    # `externos` viene con el signo del inversor (un depósito es negativo
+    # porque sale de su bolsillo). Para el TWR importa lo que entra a la
+    # cartera, así que se invierte.
+    pendientes = sorted(((f, -m) for f, m in externos), key=lambda x: x[0])
+
+    puntos: list[PuntoDeTwr] = []
+    i = 0
+    for n, fila in enumerate(filas):
+        # Al primer snapshot no se le imputa nada: lo anterior ya está adentro
+        # de su propio patrimonio.
+        desde = filas[n - 1].snapshot_date if n > 0 else None
+        flujo = ZERO
+        while i < len(pendientes) and pendientes[i][0] <= fila.snapshot_date:
+            fecha, monto = pendientes[i]
+            if desde is not None and fecha > desde:
+                flujo += monto
+            i += 1
+
+        patrimonio = (
+            fila.total_value + fila.cash_balance
+            if fila.total_value is not None
+            else None
+        )
+        puntos.append(
+            PuntoDeTwr(
+                fecha=fila.snapshot_date,
+                patrimonio=patrimonio,
+                flujo=flujo,
+                caja=fila.cash_balance,
+            )
+        )
+
+    return puntos
 
 
 async def rendimiento_de_portfolio(
@@ -154,6 +227,8 @@ async def rendimiento_de_portfolio(
         except XirrNoConverge as exc:
             motivo = str(exc)
 
+    puntos = await _puntos_de_twr(session, user_id, portfolio_id, externos)
+
     return RendimientoDeCartera(
         posiciones=posiciones,
         realizado=realizado,
@@ -163,4 +238,5 @@ async def rendimiento_de_portfolio(
         currency=total.currency,
         xirr_anual=tasa,
         xirr_motivo=motivo,
+        twr=twr(puntos),
     )
