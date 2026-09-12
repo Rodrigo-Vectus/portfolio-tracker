@@ -235,7 +235,7 @@ export function Operaciones() {
       </div>
 
       {abierto && elegido && (
-        <div className="mb-8 max-w-3xl rounded-xl border border-ink-600 bg-ink-800 p-5">
+        <div className="mb-8 max-w-3xl rounded-xl border border-ink-600 bg-ink-800 p-card">
           {/* El mismo formulario que usa Cartera. Copiarlo daria dos que
               validan distinto, y el dia que uno cambie el otro seguiria
               andando mal en silencio. */}

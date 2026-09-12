@@ -430,7 +430,7 @@ export function Cartera() {
       {/* Evolución y composición, uno al lado del otro: cómo llegó la cartera
           hasta acá y de qué está hecha hoy. */}
       <div className="mb-8 grid gap-6 xl:grid-cols-2">
-        <div className="rounded-xl border border-ink-600 bg-ink-800 p-5">
+        <div className="rounded-xl border border-ink-600 bg-ink-800 p-card">
           <h2 className="mb-4 text-sm font-medium text-text-muted">
             Evolución
           </h2>

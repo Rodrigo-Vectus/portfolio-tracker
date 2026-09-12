@@ -11,8 +11,26 @@
     <title>Portfolio Tracker</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://rsms.me" crossorigin />
+
+    <!--
+      Inter se pide DOS veces y no es un descuido.
+
+      Google Fonts recorta las funciones OpenType al generar sus subconjuntos:
+      la Inter que sirve no trae `zero` (el cero barrado) ni los conjuntos
+      `cv01`. Escribir font-feature-settings contra esa fuente no hace nada,
+      porque la función no existe en el archivo.
+
+      rsms.me es el sitio oficial de Inter y publica la variable completa, con
+      las funciones adentro. Va primero en la cascada de familias.
+
+      Google queda como respaldo: si rsms.me no responde, la interfaz se ve
+      igual de legible y lo único que se pierde es el cero barrado. Ninguna
+      funcionalidad depende de la tipografía.
+    -->
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@100..900&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
   </head>

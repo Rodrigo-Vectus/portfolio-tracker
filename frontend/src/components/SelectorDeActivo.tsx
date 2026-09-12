@@ -196,7 +196,7 @@ export function SelectorDeActivo({
       {abierto && (
         <div
           className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded border
-                     border-ink-600 bg-ink-800 shadow-lg"
+                     border-ink-500 bg-ink-700"
         >
           {coincidencias.map((a) => (
             <button

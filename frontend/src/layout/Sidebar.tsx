@@ -91,8 +91,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           className="h-10 w-10 shrink-0 rounded-lg object-cover"
         />
         <div className="min-w-0 leading-none">
-          <p className="display text-sm leading-tight">Portfolio</p>
-          <p className="display text-sm leading-tight text-brand">Tracker</p>
+          <p className="wordmark text-sm leading-tight">Portfolio</p>
+          <p className="wordmark text-sm leading-tight text-brand">Tracker</p>
         </div>
       </div>
 

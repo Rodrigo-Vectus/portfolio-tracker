@@ -19,11 +19,33 @@
 
   body {
     @apply bg-ink-950 text-text font-sans text-base antialiased;
+
+    /* `zero` dibuja el cero barrado y `tnum` fija el ancho de los dígitos.
+       En una aplicación donde casi todo el texto son importes, esto no es
+       decoración: sin el cero barrado, 0 y O se confunden en un ticker, y en
+       una columna de cifras la diferencia entre 26.560 y 26.660 tiene que
+       verse sin leer dígito por dígito. Va en el `body` para que valga
+       también fuera de `.num` — un símbolo o una fecha también tienen ceros. */
+    font-feature-settings: "tnum" on, "zero" on, "cv01" on;
   }
 
-  /* Titulares en mayúsculas, pesados y con el interletrado cerrado. Es lo que
-     le da el carácter a la referencia. */
+  /* Titular de página.
+     
+     Peso 510 y no 800. En una interfaz oscura un titular muy pesado se
+     convierte en el elemento más ruidoso de la pantalla y compite con las
+     cifras, que son lo que la persona vino a leer. El carácter lo dan el
+     interletrado cerrado y el tamaño, no el grosor.
+
+     Los titulares pesados en mayúsculas se conservan donde funcionan como
+     marca: el logo de la barra lateral y los encabezados de tabla. */
   .display {
+    @apply font-sans uppercase tracking-tight;
+    font-weight: 510;
+    letter-spacing: -0.022em;
+  }
+
+  /* El peso de marca, sólo para el logo. */
+  .wordmark {
     @apply font-display font-extrabold uppercase tracking-tight;
   }
 
@@ -36,7 +58,8 @@
      código en medio de la interfaz: dos tipografías compitiendo donde la
      cifra tiene que ser lo más legible de la pantalla. */
   .num {
-    font-variant-numeric: tabular-nums;
+    /* El ancho fijo y el cero barrado ya vienen del `body`. Acá sólo el
+       interletrado, que en una cifra larga gana algo de densidad. */
     letter-spacing: -0.005em;
   }
 

@@ -61,7 +61,7 @@ export function Distribucion({
   const total = datos.reduce((acc, d) => acc + d.valor, 0);
 
   return (
-    <div className="rounded-xl border border-ink-600 bg-ink-800 p-5">
+    <div className="rounded-xl border border-ink-600 bg-ink-800 p-card">
       <h2 className="mb-4 text-sm font-medium text-text-muted">
         Distribución por activo
       </h2>

@@ -102,7 +102,7 @@ export function Activos() {
       </div>
 
       {abierto && (
-        <div className="mb-8 max-w-2xl rounded-xl border border-ink-600 bg-ink-800 p-5">
+        <div className="mb-8 max-w-2xl rounded-xl border border-ink-600 bg-ink-800 p-card">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Símbolo"
@@ -276,7 +276,7 @@ function EditarActivo({
   }
 
   return (
-    <div className="mb-8 max-w-2xl rounded-xl border border-brand/40 bg-ink-800 p-5">
+    <div className="mb-8 max-w-2xl rounded-xl border border-brand/40 bg-ink-800 p-card">
       <p className="mb-4 text-sm text-text-muted">
         Editando <span className="font-medium text-text">{activo.symbol}</span> ·{" "}
         {activo.asset_type} · {activo.currency}

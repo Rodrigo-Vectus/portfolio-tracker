@@ -171,7 +171,7 @@ export function Caja() {
       </div>
 
       {abierto && (
-        <div className="mb-8 max-w-2xl rounded-xl border border-ink-600 bg-ink-800 p-5">
+        <div className="mb-8 max-w-2xl rounded-xl border border-ink-600 bg-ink-800 p-card">
           <div className="grid gap-4 sm:grid-cols-3">
             <Select
               label="Tipo"
@@ -217,7 +217,7 @@ export function Caja() {
         <p className="text-text-muted">Cargando…</p>
       ) : (
         <>
-          <div className="mb-8 rounded-xl border border-ink-600 bg-ink-800 p-5">
+          <div className="mb-8 rounded-xl border border-ink-600 bg-ink-800 p-card">
             <p className="text-sm text-text-muted">Disponible en {saldo.currency}</p>
             <p className="mt-1 text-2xl">
               <Num

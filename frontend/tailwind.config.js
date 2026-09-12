@@ -14,19 +14,38 @@
  * Cambio respecto de la versión anterior: el fondo pasa de un gris frío a
  * negro. Se pierde el argumento de los halos en OLED, y se gana el contraste
  * de la referencia, que es lo que se pidió.
+ *
+ * **Revisión 2026-09-11.** Se toman tres principios del sistema de Linear, que
+ * es el que menos nos obligaba a cambiar porque su canvas ya era casi el
+ * nuestro:
+ *
+ * 1. **La elevación se construye con bordes, no con sombras.** Una sombra
+ *    sobre negro es una mancha gris; un borde de un píxel define el mismo
+ *    límite sin ensuciar el fondo.
+ * 2. **Tres radios y ninguno más.** 6px en controles, 12px en tarjetas, pill
+ *    en botones y pastillas. Cada radio extra es una decisión que hay que
+ *    sostener en todas las pantallas siguientes.
+ * 3. **Escala de superficies progresiva.** Cuatro niveles con saltos parejos,
+ *    para que "más elevado" se lea sin tener que compararlos lado a lado.
+ *
+ * **Lo que NO se toma de Linear:** su sistema usa verde y rojo como acentos
+ * decorativos y dice explícitamente que no son colores de estado. Acá es al
+ * revés y no se negocia.
  */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
+        // Escala de superficies. Los saltos son parejos a propósito: el ojo
+        // tiene que distinguir un nivel del siguiente sin compararlos.
         ink: {
-          950: "#000000", // fondo de la página
-          900: "#08090B", // barra lateral
-          800: "#101215", // tarjetas y superficies
-          700: "#181B20", // superficie elevada, hover
-          600: "#242830", // bordes
-          500: "#333944", // bordes de énfasis
+          950: "#000000", // canvas de la página
+          900: "#08090B", // barra lateral, superficie contenida
+          800: "#101215", // tarjetas
+          700: "#181B20", // superficie elevada, hover, panel modal
+          600: "#242830", // borde hairline
+          500: "#333944", // borde de énfasis, separador de sección
         },
         text: {
           DEFAULT: "#F2F4F7",
@@ -49,7 +68,16 @@ export default {
       fontFamily: {
         // Titulares: pesada y algo condensada, en mayúsculas.
         display: ['"Archivo"', "system-ui", "sans-serif"],
-        sans: ['"Inter"', "system-ui", "-apple-system", "sans-serif"],
+        // `InterVariable` (rsms.me) primero: es la unica que trae el cero
+        // barrado y los pesos intermedios. `Inter` de Google queda de
+        // respaldo, y `system-ui` si no hay red.
+        sans: [
+          '"InterVariable"',
+          '"Inter"',
+          "system-ui",
+          "-apple-system",
+          "sans-serif",
+        ],
         // Cifras, códigos y etiquetas: ancho fijo.
         mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
       },
@@ -62,10 +90,20 @@ export default {
         "2xl": ["2rem", { lineHeight: "1.15" }],
         "3xl": ["2.75rem", { lineHeight: "1.05" }],
       },
+      // Tres radios y nada más: controles, tarjetas y pastillas.
       borderRadius: {
-        DEFAULT: "0.5rem",
-        lg: "0.75rem",
-        xl: "1rem",
+        DEFAULT: "0.375rem", // 6px  — inputs, selects, botones cuadrados
+        lg: "0.375rem", // alias del anterior: evita un cuarto radio por descuido
+        xl: "0.75rem", // 12px — tarjetas y paneles
+      },
+      // Escala de espaciado de la referencia. No reemplaza la de Tailwind:
+      // agrega los pasos que faltaban para no caer en valores arbitrarios.
+      spacing: {
+        section: "6rem", // 96px — separación entre bloques de una pantalla
+        card: "1.5rem", // 24px — padding interno de una tarjeta
+      },
+      letterSpacing: {
+        display: "-0.022em",
       },
     },
   },

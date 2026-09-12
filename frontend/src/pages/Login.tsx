@@ -38,8 +38,8 @@ export function Login() {
             className="h-12 w-12 shrink-0 rounded-lg object-cover"
           />
           <div className="leading-none">
-            <p className="display text-lg leading-tight">Portfolio</p>
-            <p className="display text-lg leading-tight text-brand">Tracker</p>
+            <p className="wordmark text-lg leading-tight">Portfolio</p>
+            <p className="wordmark text-lg leading-tight text-brand">Tracker</p>
           </div>
         </div>
 

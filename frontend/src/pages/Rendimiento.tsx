@@ -50,7 +50,7 @@ function Cifra({
   porcentaje?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-ink-600 bg-ink-800 p-5">
+    <div className="rounded-xl border border-ink-600 bg-ink-800 p-card">
       <p className="text-sm text-text-muted">{etiqueta}</p>
       <p className="mt-1 text-xl">
         {valor === null ? (
@@ -78,7 +78,7 @@ function TarjetaTwr({ twr }: { twr: TwrT }) {
   const hay = twr.acumulado !== null;
 
   return (
-    <div className="rounded-xl border border-ink-600 bg-ink-800 p-5">
+    <div className="rounded-xl border border-ink-600 bg-ink-800 p-card">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-text-muted">Rendimiento de la cartera (TWR)</p>
         {(twr.corte || twr.advertencia) && <Pill tono="aviso">Leer la nota</Pill>}

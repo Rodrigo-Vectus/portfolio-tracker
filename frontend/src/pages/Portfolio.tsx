@@ -74,7 +74,7 @@ function ValorTotal({ total }: { total: Total }) {
 
   if (total.total === null) {
     return (
-      <div className="mb-8 rounded-xl border border-ink-600 bg-ink-800 p-5">
+      <div className="mb-8 rounded-xl border border-ink-600 bg-ink-800 p-card">
         <p className="text-sm text-text-muted">Valor de la cartera</p>
         <p className="mt-1 text-2xl text-stale">No se puede calcular</p>
         <p className="mt-2 max-w-prose text-sm text-text-muted">
@@ -86,7 +86,7 @@ function ValorTotal({ total }: { total: Total }) {
   }
 
   return (
-    <div className="mb-8 rounded-xl border border-ink-600 bg-ink-800 p-5">
+    <div className="mb-8 rounded-xl border border-ink-600 bg-ink-800 p-card">
       <p className="text-sm text-text-muted">Valor de la cartera</p>
       <p className="mt-1 text-2xl">
         <Num>{formatearImporte(total.total)}</Num>{" "}
@@ -202,7 +202,7 @@ export function Portfolio() {
   // aparecía cuando no había ninguno, así que al crear el primero desaparecía
   // para siempre y la pantalla quedaba sin ninguna acción posible.
   const formulario = (
-    <div className="mb-8 max-w-md rounded-xl border border-ink-600 bg-ink-800 p-5">
+    <div className="mb-8 max-w-md rounded-xl border border-ink-600 bg-ink-800 p-card">
       <div className="grid gap-4">
             <Field
               label="Nombre"

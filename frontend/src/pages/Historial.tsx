@@ -205,7 +205,7 @@ export function Historial() {
             )}
           </div>
 
-          <div className="rounded-xl border border-ink-600 bg-ink-800 p-5">
+          <div className="rounded-xl border border-ink-600 bg-ink-800 p-card">
             <GraficoDeEvolucion puntos={datos.puntos} />
           </div>
 

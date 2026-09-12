@@ -313,7 +313,7 @@ export function Modal({
         // El clic de adentro no cierra: sin esto, elegir una opción de un
         // select cuenta como clic en el fondo y el panel se cierra solo.
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-3xl rounded-xl border border-ink-600 bg-ink-800 p-6 shadow-2xl"
+        className="w-full max-w-3xl rounded-xl border border-ink-500 bg-ink-700 p-card"
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <h2 className="display text-lg uppercase tracking-wide">{titulo}</h2>

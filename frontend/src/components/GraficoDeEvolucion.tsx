@@ -66,7 +66,7 @@ function Globo({ active, payload }: any) {
   const f: Fila = payload[0].payload;
 
   return (
-    <div className="rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 shadow-2xl shadow-black/60">
+    <div className="rounded border border-ink-500 bg-ink-900 px-3 py-2">
       <p className="code text-micro text-text-faint">{formatearFecha(f.fecha)}</p>
       <p className="mt-1 text-sm">
         {f.valor === null ? (
@@ -101,9 +101,51 @@ function Marca({ cx, cy, payload }: any) {
   );
 }
 
+/**
+ * Rango del eje vertical.
+ *
+ * **No arranca en cero y eso necesita justificarse.** Una cartera de 365.000
+ * que se movió 11.000 en cuatro días, dibujada desde cero, da una línea recta:
+ * el gráfico ocupa lugar y no dice nada. Un eje que arranca cerca de los datos
+ * muestra el movimiento que existe.
+ *
+ * El riesgo conocido de recortar el eje es exagerar: una variación mínima
+ * parece un derrumbe. Se acota de dos maneras. Primero, el eje **siempre
+ * muestra sus números**, así que la magnitud real está a la vista y no hay que
+ * deducirla de la pendiente. Segundo, se agrega un margen del 15% del rango
+ * arriba y abajo, para que la línea no toque los bordes y la pendiente no se
+ * vea más empinada de lo que es.
+ *
+ * El costo de lo abierto entra en el cálculo: es la referencia contra la que
+ * se lee el valor, y dejarlo fuera del rango lo sacaría del dibujo.
+ */
+function calcularDominio(filas: Fila[]): [number, number] | undefined {
+  const valores = filas
+    .flatMap((f) => [f.valor, f.costo])
+    .filter((v): v is number => v !== null);
+
+  if (valores.length === 0) return undefined;
+
+  const min = Math.min(...valores);
+  const max = Math.max(...valores);
+
+  // Una serie plana no tiene rango del que sacar un margen: se abre a mano
+  // para que la línea quede en el medio y no pegada a un borde.
+  if (min === max) {
+    const margen = Math.abs(min) * 0.05 || 1;
+    return [min - margen, max + margen];
+  }
+
+  const margen = (max - min) * 0.15;
+  // El piso no baja de cero: una cartera con valor negativo no existe, y un
+  // eje que lo insinúa afirma algo imposible.
+  return [Math.max(0, min - margen), max + margen];
+}
+
 export function GraficoDeEvolucion({ puntos }: { puntos: Punto[] }) {
   const filas = aFilas(puntos);
   const estimados = filas.filter((f) => f.estimado).length;
+  const dominio = calcularDominio(filas);
 
   return (
     <div>
@@ -135,6 +177,7 @@ export function GraficoDeEvolucion({ puntos }: { puntos: Punto[] }) {
                     axisLine={false}
                     width={56}
                     tickFormatter={abreviar}
+                    domain={dominio}
                   />
                   <Tooltip content={<Globo />} cursor={{ stroke: "#333944" }} />
 
@@ -180,6 +223,10 @@ export function GraficoDeEvolucion({ puntos }: { puntos: Punto[] }) {
                   Antigüedad estimada
                 </span>
               )}
+              {/* Decirlo es lo que hace honesto al recorte. La pendiente de un
+                  eje acotado se ve más empinada de lo que es, y quien mira
+                  tiene derecho a saber que el eje no arranca en cero. */}
+              <span>El eje arranca cerca de los datos, no en cero.</span>
         </div>
     </div>
   );

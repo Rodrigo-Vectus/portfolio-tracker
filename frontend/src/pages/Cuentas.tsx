@@ -94,7 +94,7 @@ export function Cuentas() {
       </div>
 
       {abierto && (
-        <div className="mb-8 max-w-2xl rounded-xl border border-ink-600 bg-ink-800 p-5">
+        <div className="mb-8 max-w-2xl rounded-xl border border-ink-600 bg-ink-800 p-card">
           <div className="grid gap-4 sm:grid-cols-3">
             <Field
               label="Nombre"
